@@ -208,6 +208,7 @@ const metaOf=a=>{const m={...a};delete m.url;if(a.kind==="link")m.url=a.url;retu
 const lite=db=>({a:db.a.map(a=>({...metaOf(a),_u:urlSig(a)})),pw:{...db.pw},links:clone(db.links)});
 
 /* Splits an exam into a PUBLIC page (no answers) and a PRIVATE answer key that stays on the server. */
+function isPubBody(url){try{const m=dataToText(url).match(/<script id="exam-data" type="application\/json">([\s\S]*?)<\/script>/);return !!(m&&/"remote":\s*true/.test(m[1]))}catch(e){return false}}
 function splitExam(text,aid){
  const m=text.match(/(<script id="exam-data" type="application\/json">)([\s\S]*?)(<\/script>)/);
  if(!m||!m[2].trim())return null;
@@ -234,7 +235,7 @@ async function syncDb(){
  for(const a of next.a){
   const old=pm.get(a.id),m=metaOf(a),sig=urlSig(a);
   const metaChanged=!old||JSON.stringify(metaOf(old))!==JSON.stringify(m)&&true;
-  const newContent=a.kind!=="link"&&a.url&&(!old||old._u!==sig);
+  const newContent=a.kind!=="link"&&a.url&&(!old||old._u!==sig)&&!(old&&a.kind==="html"&&isPubBody(a.url));
   if(newContent){
    let body=null,path=null;
    if(a.kind==="html"){
@@ -290,7 +291,7 @@ async function ensureContent(a){
  let body=null,path=null;
  if(isStaff()){const r=await rows("assessments","id=eq."+enc(a.id)+"&select=body,path");if(!r.ok||!r.j||!r.j[0])return false;body=r.j[0].body;path=r.j[0].path}
  else{const r=await rpc("open_assessment",{p_id:a.id,p_pw:ss_get("ca_pwh_"+a.year)||""});if(!r.ok||!r.j||!r.j.ok)return false;body=r.j.body;path=r.j.path}
- if(body!=null){a.url=textToData(body);return true}
+ if(body!=null){a.url=textToData(body);{const sn=_snap.a.find(x=>x.id===a.id);if(sn)sn._u=urlSig(a)}return true}
  if(path){try{const f=await fetch(SB+"/storage/v1/object/public/assessment-files/"+path);if(!f.ok)return false;a.url=await readFile(await f.blob());return true}catch(e){return false}}
  return false}
 
