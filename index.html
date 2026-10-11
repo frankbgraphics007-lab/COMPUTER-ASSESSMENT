@@ -318,10 +318,11 @@ const Live=REMOTE?LiveRemote:LiveLocal;
 window.__submitExam=async function(p){
  if(!REMOTE)return{ok:false,fatal:true,msg:"The online server is not connected."};
  if(isStaff())return{ok:false,fatal:true,msg:"Preview only. Results are not saved for staff."};
+ try{if(typeof EX!=="undefined"&&EX&&!EX.released&&EX.name&&p&&p.student){p.student.name=EX.name;if(window.__stuCls)p.student.cls=window.__stuCls}}catch(e){}   // use the name verified against the class list, not what was typed inside the exam
  try{const r=await fetch(SB+"/functions/v1/quick-endpoint",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json"},body:JSON.stringify(p)});
   let j=null;try{j=await r.json()}catch(e){}
   if(r.ok&&j&&j.ok)return j;
-  if(r.status>=400&&r.status<500&&r.status!==429)return{ok:false,fatal:true,msg:(j&&j.msg)||"Could not submit. Tell your teacher."};
+  if(r.status>=400&&r.status<500&&r.status!==429)return{ok:false,fatal:true,msg:(j&&j.msg)||("Could not submit (code "+r.status+"). Tell your teacher.")};
  }catch(e){}
  return{ok:false}};
 async function gateOk(y,v){
@@ -423,7 +424,7 @@ ${res?'<div class="msg">Your exam is still open. Resume it to continue. Leaving 
 function bindExamGate(a){const bad=m=>{$("#exe").innerHTML='<div class="msg bad">'+m+'</div>'};
  let tm;$("#exn").addEventListener("input",()=>{if(!REMOTE)return;clearTimeout(tm);tm=setTimeout(async()=>{const v=$("#exn").value.trim();if(v.length<3)return;const r=await rpc("find_students",{p_q:v,p_year:+a.year});if(r.ok&&Array.isArray(r.j))$("#exl").innerHTML=r.j.map(x=>`<option value="${esc(x.name)}">${esc(x.cls)}</option>`).join("")},250)});
  $("#exb").onclick=async()=>{let n=$("#exn").value.trim();if(!n){bad("Enter your full name to begin.");return}
-  if(REMOTE&&!isStaff()&&!$("#exn").readOnly){const r=await rpc("check_student",{p_name:n,p_year:+a.year});if(r.ok&&r.j&&r.j.ok)n=r.j.name;else{bad("Your name is not on the Year "+a.year+" class list. Pick it from the suggestions, or ask your teacher.");return}}
+  if(REMOTE&&!isStaff()&&!$("#exn").readOnly){const r=await rpc("check_student",{p_name:n,p_year:+a.year});if(r.ok&&r.j&&r.j.ok){n=r.j.name;window.__stuCls=r.j.cls||""}else{bad("Your name is not on the Year "+a.year+" class list. Pick it from the suggestions, or ask your teacher.");return}}
   beginExam(a,n)}}
 const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
 async function enterFS(){
@@ -1228,7 +1229,17 @@ function bindPw(){const b=$("#pw_go");if(!b)return;
   }catch(e){}}
  attach(document);
  /* also protect the exam iframe */
- const _g=guard;guard=function(d){_g.apply(this,arguments);attach(d)};
+ function prefill(d){
+  if(!d||isStaff()||typeof EX==="undefined"||!EX||EX.released||!EX.name)return;
+  let n=0;const go=()=>{try{
+   const nm=d.getElementById("i-name");if(!nm){if(++n<30)setTimeout(go,250);return}
+   nm.value=EX.name;nm.readOnly=true;nm.style.background="#eef2f7";nm.title="Taken from your class list";
+   const cl=window.__stuCls,sel=d.getElementById("i-cls");
+   if(sel&&cl){const nz=s=>String(s).toUpperCase().replace(/\s+/g," ").trim();let o=[...sel.options].find(x=>nz(x.value)===nz(cl)||nz(x.text)===nz(cl));
+    if(!o){o=d.createElement("option");o.value=cl;o.textContent=cl;sel.appendChild(o)}
+    sel.value=o.value;sel.disabled=true}
+  }catch(e){}};go()}
+ const _g=guard;guard=function(d){_g.apply(this,arguments);attach(d);prefill(d)};
  /* hide the page whenever the window loses focus (snipping tools, other windows) */
  let hid=false;
  window.addEventListener("blur",()=>setTimeout(()=>{if(!on()||document.hasFocus())return;hid=true;cv.style.display="flex";log("blur","Window lost focus")},60));   // hasFocus() stays true when the click is inside the exam frame
