@@ -319,11 +319,14 @@ window.__submitExam=async function(p){
  if(!REMOTE)return{ok:false,fatal:true,msg:"The online server is not connected."};
  if(isStaff())return{ok:false,fatal:true,msg:"Preview only. Results are not saved for staff."};
  try{if(typeof EX!=="undefined"&&EX&&!EX.released&&EX.name&&p&&p.student){p.student.name=EX.name;if(window.__stuCls)p.student.cls=window.__stuCls}}catch(e){}   // use the name verified against the class list, not what was typed inside the exam
+ let why="";
  try{const r=await fetch(SB+"/functions/v1/quick-endpoint",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json"},body:JSON.stringify(p)});
   let j=null;try{j=await r.json()}catch(e){}
   if(r.ok&&j&&j.ok)return j;
   if(r.status>=400&&r.status<500&&r.status!==429)return{ok:false,fatal:true,msg:(j&&j.msg)||("Could not submit (code "+r.status+"). Tell your teacher.")};
- }catch(e){}
+  why="server replied "+r.status+(j&&j.why?" ("+j.why+")":"");
+ }catch(e){why="request blocked or no internet ("+(e&&e.message||"error")+")"}
+ try{setTimeout(()=>{const f=document.getElementById("exfr"),d=f&&f.contentDocument&&f.contentDocument.getElementById("subov");if(d&&!/Reason:/.test(d.textContent))d.textContent+="  [Reason: "+why+"]"},400)}catch(e){}
  return{ok:false}};
 async function gateOk(y,v){
  if(!REMOTE)return(await sha(v))===db.pw[y];
