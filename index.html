@@ -330,7 +330,7 @@ async function gateOk(y,v){
  if(r.ok&&r.j===true){ss_set("ca_pwh_"+y,h);return true}return false}
 
 /* ===== Results panel for staff ===== */
-const RESP=()=>`<div class="panel"><h2>Student results</h2>${REMOTE?`<p class="note">Marked on the server and saved automatically. Load them here, filter by exam, or download everything as CSV.</p>
+const RESP_OLD=()=>`<div class="panel"><h2>Student results</h2>${REMOTE?`<p class="note">Marked on the server and saved automatically. Load them here, filter by exam, or download everything as CSV.</p>
 <div class="row"><button class="btn sm" id="rsl">Load results</button><button class="btn sm alt" id="rsc" hidden>Download CSV</button><button class="btn sm alt" id="rsv">Correct answers shown to students: ${_reveal?"ON":"OFF"}</button></div><p class="note" style="margin-top:4px">Keep this OFF during the exam week. Turn it ON when every class has finished, so students cannot pass answers to others.</p><div id="rs"></div>`:`<p class="note">Results are saved online once Supabase is connected.</p>`}</div>`;
 let RS=[];
 function bindRes(){
@@ -864,6 +864,7 @@ function route(){
   else{h=view(a);after=()=>afterView(a)}}
  else if(R==="preview"){if(!isStaff()){location.replace("#/");return}const a=db.a.find(x=>x.id===p[1]);k="staff";if(a){h=view(a,true);after=()=>afterView(a)}else h='<div class="empty">Assessment not found.</div>'}
  else if(R==="maker"){k="staff";if(!isStaff()){location.replace("#/staff");return}h=makerView();after=bindMaker}
+ else if(R==="manage"){k="staff";if(!isStaff()){location.replace("#/staff");return}h=manageView();after=bindManage}
  else if(R==="classroom"){k="classroom";h=classroom()}
  else if(R==="staff"){k="staff";if(isStaff()){h=staffDash();after=bindDash}else{h=staffLogin();after=bindLogin}}
  else h='<div class="empty">Page not found.</div>';
@@ -878,7 +879,7 @@ setInterval(watchLive,2000);
 /* ===== Main admin: teachers + student roster ===== */
 const isAdmin=()=>ss_get("ca_role")==="admin";
 let UQ={y:"",q:""},UD={st:[],ro:[]};
-function USERS(){return `<div class="msg">Signed in as <b>${isAdmin()?"Main admin":"Teacher"}</b>.</div>`+(isAdmin()&&REMOTE?`<div class="panel"><h2>Main admin: users</h2><div id="usr"><p class="note">Loading…</p></div></div>`:"")}
+function USERS_OLD(){return `<div class="msg">Signed in as <b>${isAdmin()?"Main admin":"Teacher"}</b>.</div>`+(isAdmin()&&REMOTE?`<div class="panel"><h2>Main admin: users</h2><div id="usr"><p class="note">Loading…</p></div></div>`:"")}
 async function loadUsers(){const a=await rows("staff_users","select=*&order=role.asc,name.asc"),b=await rows("roster","select=id,adm,name,cls,year,active&order=year,cls,name&limit=3000");UD.st=a.ok&&a.j||[];UD.ro=b.ok&&b.j||[];drawUsers()}
 function UFILT(){const q=UQ.q.toUpperCase();return UD.ro.filter(x=>(!UQ.y||x.year==UQ.y)&&(!q||x.name.includes(q)||x.cls.includes(q)))}
 function drawUsers(){const box=$("#usr");if(!box)return;const f=UFILT(),act=UD.ro.filter(x=>x.active).length;
@@ -895,7 +896,165 @@ function drawUsers(){const box=$("#usr");if(!box)return;const f=UFILT(),act=UD.r
  $$("[data-ra]").forEach(c=>c.onchange=()=>pat([c.dataset.ra],c.checked));
  $$("[data-sr]").forEach(b=>b.onclick=async()=>{if(b.dataset.armed){await sb("/rest/v1/staff_users?email=eq."+enc(b.dataset.sr),{method:"DELETE"});loadUsers()}else{b.dataset.armed="1";b.textContent="Confirm";setTimeout(()=>{b.dataset.armed="";b.textContent="Remove"},4000)}});
  $("#ua").onclick=async()=>{const n=$("#un").value.trim(),e=$("#ue").value.trim().toLowerCase();if(!n||!/^\S+@\S+\.\S+$/.test(e)){toast("Enter a name and a valid email.");return}const r=await sb("/rest/v1/staff_users",{method:"POST",body:JSON.stringify({email:e,name:n,role:"teacher"}),headers:{Prefer:"return=minimal"}});toast(r.ok?"Teacher added.":"Could not add (already listed?).");loadUsers()}}
-{const _s2=staffDash,_b2=bindDash;staffDash=function(){return USERS()+_s2.apply(this,arguments)};bindDash=function(){_b2.apply(this,arguments);if(isAdmin()&&REMOTE)loadUsers()}}
+{const _s2=staffDash,_b2=bindDash;staffDash=function(){return USERS()+_s2.apply(this,arguments)};bindDash=function(){_b2.apply(this,arguments)}}
+
+/* ===== Manage Data: results, students, teachers (select all / one by one, edit, delete) ===== */
+const MANAGE_CARD=()=>`<div class="panel"><h2>Manage data</h2><p class="note" style="margin-top:6px">See, edit and delete student results. Add, edit and delete students and teachers. Run the connection test.</p><div class="row"><a class="btn" href="#/manage">Open Manage Data</a></div></div>`;
+const RESP=()=>MANAGE_CARD();
+function USERS(){return `<div class="msg">Signed in as <b>${isAdmin()?"Main admin":"Teacher"}</b>.</div>`}
+const GRADE=p=>p>=75?"A":p>=60?"B":p>=50?"C":p>=40?"D":"F";
+const fmtD=d=>d?new Date(d).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"";
+const sx=v=>esc(String(v==null?"":v));
+const PAGE=50;
+const MG={idx:null,noidx:false,rf:{on:false,y:"",c:"",a:""},tab:"results",data:{results:null,students:null,teachers:null},
+ sel:{results:new Set(),students:new Set(),teachers:new Set()},
+ q:{results:{t:"",a:""},students:{t:"",y:"",c:"",s:""},teachers:{t:""}},pg:{results:0,students:0,teachers:0},tm:0};
+const TB={
+ results:{tbl:"results",key:"id",name:"results",
+  cols:[["Student","name"],["Class","cls"],["Assessment","title"],["Marks",r=>r.total+"/"+r.max_marks],["%","pct"],["Grade","grade"],["Tab sw.","tabs"],["Submitted",r=>fmtD(r.submitted_at)]],
+  q:"select=id,aid,title,year,name,cls,cand,total,max_marks,pct,grade,tabs,pen,submitted_at&order=id.desc",
+  hay:r=>(r.name+" "+r.cls+" "+r.title).toUpperCase()},
+ students:{tbl:"roster",key:"id",name:"students",admin:true,
+  cols:[["Name","name"],["Class","cls"],["Year","year"],["Adm. no","adm"],["Sex","sex"],["Active",r=>r.active?"Yes":"No"]],
+  q:"select=id,adm,name,cls,year,sex,active&order=year,cls,name,id",
+  hay:r=>(r.name+" "+r.cls+" "+(r.adm||"")).toUpperCase()},
+ teachers:{tbl:"staff_users",key:"email",name:"teachers",admin:true,lock:r=>r.role==="admin",
+  cols:[["Name","name"],["Email","email"],["Reg","reg"],["Role",r=>r.role==="admin"?"Main admin":"Teacher"]],
+  q:"select=email,name,reg,role&order=role,name",
+  hay:r=>(r.name+" "+r.email).toUpperCase()}
+};
+async function fetchAll(table,q){const out=[];for(let o=0;;o+=1000){const r=await rows(table,q+"&limit=1000&offset="+o);if(!r.ok)return null;const j=r.j||[];out.push(...j);if(j.length<1000)break}return out}
+function filt(t){const T=TB[t],q=MG.q[t],all=MG.data[t]||[],s=(q.t||"").trim().toUpperCase();
+ return all.filter(r=>{if(s&&!T.hay(r).includes(s))return false;
+  if(t==="results"&&q.a&&r.title!==q.a)return false;
+  if(t==="students"){if(q.y&&String(r.year)!==q.y)return false;if(q.c&&r.cls!==q.c)return false;if(q.s==="1"&&!r.active)return false;if(q.s==="0"&&r.active)return false}
+  return true})}
+function mgModal(html){const o=document.createElement("div");o.style.cssText="position:fixed;inset:0;background:rgba(10,18,38,.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:14px";
+ o.innerHTML=`<div class="panel" style="max-width:480px;width:100%;max-height:92vh;overflow:auto;margin:0">${html}</div>`;document.body.appendChild(o);
+ o.addEventListener("click",e=>{if(e.target===o)o.remove()});return o}
+function confirmBox(msg,word){return new Promise(res=>{
+ const o=mgModal(`<h2>Please confirm</h2><p>${msg}</p>${word?`<label for="cbw">Type <b>${word}</b> to continue</label><input id="cbw" autocomplete="off">`:""}<div class="row"><button class="btn danger" id="cby"${word?" disabled":""}>Yes, continue</button><button class="btn alt" id="cbn">Cancel</button></div>`);
+ const y=o.querySelector("#cby");if(word)o.querySelector("#cbw").oninput=e=>{y.disabled=e.target.value.trim()!==word};
+ y.onclick=()=>{o.remove();res(true)};o.querySelector("#cbn").onclick=()=>{o.remove();res(false)}})}
+async function delKeys(t,keys){const T=TB[t];
+ for(let i=0;i<keys.length;i+=100){const part=keys.slice(i,i+100);
+  const v=T.key==="email"?"("+part.map(x=>'"'+String(x).replace(/"/g,"")+'"').join(",")+")":"("+part.join(",")+")";
+  const r=await sb("/rest/v1/"+T.tbl+"?"+T.key+"=in."+enc(v),{method:"DELETE",headers:{Prefer:"return=minimal"}});if(!r.ok)return false}
+ return true}
+async function patchKeys(t,keys,body){const T=TB[t];
+ for(let i=0;i<keys.length;i+=100){const part=keys.slice(i,i+100);
+  const r=await sb("/rest/v1/"+T.tbl+"?"+T.key+"=in."+enc("("+part.join(",")+")"),{method:"PATCH",body:JSON.stringify(body),headers:{Prefer:"return=minimal"}});if(!r.ok)return false}
+ return true}
+
+const rfQuery=()=>{const f=MG.rf;return(f.y?"&year=eq."+enc(f.y):"")+(f.c?"&cls=eq."+enc(f.c):"")+(f.a?"&aid=eq."+enc(f.a):"")};
+function mgResHome(){const box=$("#mgbody"),I=MG.idx||[],rf=MG.rf;
+ const yrs=[...new Set(I.map(x=>x.year).filter(v=>v!=null))].sort((a,b)=>a-b);
+ const inY=x=>!rf.y||String(x.year)===rf.y;
+ const cls=[...new Set(I.filter(inY).map(x=>x.cls))].sort();
+ const ass=[...new Map(I.filter(x=>inY(x)&&(!rf.c||x.cls===rf.c)).map(x=>[x.aid,x.title])).entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+ box.innerHTML=`<p class="note">Results are stored in one fast table and separated by year, class and exam. Choose what you want to see, then load it.</p>
+<div class="row" style="flex-wrap:wrap;gap:8px"><select id="rfy"><option value="">All years</option>${yrs.map(y=>`<option value="${y}"${rf.y==y?" selected":""}>Year ${y}</option>`).join("")}</select>
+<select id="rfc"><option value="">All classes</option>${cls.map(c=>`<option${rf.c===c?" selected":""}>${sx(c)}</option>`).join("")}</select>
+<select id="rfa" style="max-width:260px"><option value="">All exams</option>${ass.map(([a,t])=>`<option value="${sx(a)}"${rf.a===a?" selected":""}>${sx(t)}</option>`).join("")}</select>
+<button class="btn" id="rfl">Load results</button></div>
+${MG.noidx?'<div class="msg bad">The class summary is not set up yet. Run 3-results-by-class.sql in Supabase. You can still press Load results.</div>':`<div class="tw"><table><tr><th>Year</th><th>Class</th><th>Exam</th><th>Results</th><th></th></tr>${I.filter(inY).filter(x=>!rf.c||x.cls===rf.c).map(x=>`<tr><td>${sx(x.year)}</td><td>${sx(x.cls)}</td><td>${sx(x.title)}</td><td>${sx(x.n)}</td><td><button class="btn sm alt" data-ri="${sx(x.aid)}|${sx(x.cls)}">Open</button></td></tr>`).join("")||'<tr><td colspan="5">No results yet.</td></tr>'}</table></div>`}`;
+ const redo=()=>mgResHome();
+ $("#rfy").onchange=e=>{rf.y=e.target.value;rf.c="";rf.a="";redo()};
+ $("#rfc").onchange=e=>{rf.c=e.target.value;rf.a="";redo()};
+ $("#rfa").onchange=e=>{rf.a=e.target.value;redo()};
+ $("#rfl").onclick=()=>{rf.on=true;MG.data.results=null;mgShow()};
+ $$("[data-ri]").forEach(b=>b.onclick=()=>{const [a,c]=b.dataset.ri.split("|"),x=I.find(z=>z.aid===a&&z.cls===c)||{};rf.y=x.year==null?"":String(x.year);rf.c=c;rf.a=a;rf.on=true;MG.data.results=null;mgShow()})}
+function manageView(){return crumb([["Home","#/"],["Staff dashboard","#/staff"],["Manage data"]])+`<div class="ph"><h1>MANAGE DATA</h1><div class="rule"></div></div>
+<div class="panel"><div class="row" id="mgtabs">${[["results","Results"],["students","Students"],["teachers","Teachers"],["diag","Connection test"]].map(([k,n])=>`<button class="btn sm${MG.tab===k?"":" alt"}" data-mt="${k}">${n}</button>`).join("")}</div><div id="mgbody" style="margin-top:12px"></div></div>`}
+function bindManage(){if(!REMOTE){$("#mgbody").innerHTML='<p class="note">Connect Supabase first (SUPABASE_URL in index.html).</p>';return}
+ $$("[data-mt]").forEach(b=>b.onclick=()=>{MG.tab=b.dataset.mt;mgShow()});mgShow()}
+async function mgShow(){const t=MG.tab;$$("[data-mt]").forEach(b=>b.classList.toggle("alt",b.dataset.mt!==t));
+ if(t==="diag"){mgDiag();return}
+ const box=$("#mgbody");
+ if(t==="results"){
+  if(!MG.idx){box.innerHTML='<p class="note">Loading…</p>';const r=await fetchAll("results_index","select=year,cls,aid,title,n&order=year,cls,title");MG.noidx=!r;MG.idx=r||[]}
+  if(!MG.rf.on){mgResHome();return}}
+ if(!MG.data[t]){box.innerHTML='<p class="note">Loading…</p>';const d=await fetchAll(TB[t].tbl,TB[t].q+(t==="results"?rfQuery():""));
+  if(!d){box.innerHTML='<div class="msg bad">Could not load. Check your connection, or log in again.</div>';return}MG.data[t]=d}
+ mgDraw()}
+function mgDraw(){const t=MG.tab,T=TB[t],all=MG.data[t],f=filt(t),can=T.admin?isAdmin():true,S=MG.sel[t],q=MG.q[t];
+ const pages=Math.max(1,Math.ceil(f.length/PAGE));if(MG.pg[t]>=pages)MG.pg[t]=pages-1;const pg=MG.pg[t],show=f.slice(pg*PAGE,pg*PAGE+PAGE);
+ const sel=f.filter(r=>!(T.lock&&T.lock(r))),allOn=sel.length>0&&sel.every(r=>S.has(r[T.key])),n=S.size;
+ let tools=`<input id="mgq" placeholder="Search…" value="${sx(q.t)}" style="max-width:240px">`;
+ if(t==="results"){const ts=[...new Set(all.map(r=>r.title))].sort();tools+=`<select data-f="a" style="max-width:260px"><option value="">All assessments</option>${ts.map(x=>`<option${q.a===x?" selected":""}>${sx(x)}</option>`).join("")}</select>`}
+ if(t==="students"){const cs=[...new Set(all.map(r=>r.cls))].sort();
+  tools+=`<select data-f="y"><option value="">All years</option>${[7,8,9,10].map(y=>`<option value="${y}"${q.y==y?" selected":""}>Year ${y}</option>`).join("")}</select><select data-f="c"><option value="">All classes</option>${cs.map(x=>`<option${q.c===x?" selected":""}>${sx(x)}</option>`).join("")}</select><select data-f="s"><option value="">Active + inactive</option><option value="1"${q.s==="1"?" selected":""}>Active only</option><option value="0"${q.s==="0"?" selected":""}>Inactive only</option></select>`}
+ const dis=(!can||!n)?" disabled":"";
+ let bulk=`<button class="btn sm danger" id="mgdel"${dis}>Delete selected (${n})</button>`;
+ if(t==="students")bulk+=`<button class="btn sm" id="mgon"${dis}>Activate selected</button><button class="btn sm alt" id="mgoff"${dis}>Deactivate selected</button>`;
+ if(t!=="teachers")bulk+=`<button class="btn sm alt" id="mgcsv">Download CSV (${f.length})</button>`;
+ if(t==="results")bulk+=`<button class="btn sm alt" id="mgback">← Classes</button><button class="btn sm alt" id="mgrv">Correct answers shown to students: ${_reveal?"ON":"OFF"}</button>`;
+ if(t!=="results"&&can)bulk+=`<button class="btn sm" id="mgadd">+ Add ${t==="students"?"student":"teacher"}</button>`;
+ const head=`<th><input type="checkbox" id="mgall" aria-label="Select all"${allOn?" checked":""}${can?"":" disabled"}></th>${T.cols.map(c=>`<th>${c[0]}</th>`).join("")}<th></th>`;
+ const body=show.map(r=>{const k=sx(r[T.key]),lk=T.lock&&T.lock(r);
+  return `<tr><td><input type="checkbox" data-k="${k}"${S.has(r[T.key])?" checked":""}${(!can||lk)?" disabled":""}></td>${T.cols.map(c=>`<td>${sx(typeof c[1]==="function"?c[1](r):r[c[1]])}</td>`).join("")}<td>${can&&!lk||t==="results"?`<button class="btn sm alt" data-e="${k}">Edit</button>`:""}</td></tr>`}).join("");
+ $("#mgbody").innerHTML=`<div class="row" style="flex-wrap:wrap;gap:8px">${tools}</div>
+<p class="note">${f.length} of ${all.length} shown. ${n?`<b>${n} selected.</b> `:""}${!can?"Only the main admin can change this list.":"Tick the box at the top of the table to select all "+f.length+" (all pages)."}</p>
+<div class="row" style="flex-wrap:wrap;gap:8px">${bulk}</div>
+<div class="tw"><table><tr>${head}</tr>${body||`<tr><td colspan="${T.cols.length+2}">Nothing to show.</td></tr>`}</table></div>
+<div class="row"><button class="btn sm alt" data-pg="-1"${pg?"":" disabled"}>Previous</button><span class="note" style="align-self:center">Page ${pg+1} of ${pages}</span><button class="btn sm alt" data-pg="1"${pg<pages-1?"":" disabled"}>Next</button></div>`;
+ const qi=$("#mgq");qi.oninput=()=>{clearTimeout(MG.tm);MG.tm=setTimeout(()=>{q.t=qi.value;MG.pg[t]=0;S.clear();mgDraw();const z=$("#mgq");z.focus();z.setSelectionRange(z.value.length,z.value.length)},300)};
+ $$("[data-f]").forEach(s=>s.onchange=()=>{q[s.dataset.f]=s.value;MG.pg[t]=0;S.clear();mgDraw()});
+ $$("[data-pg]").forEach(b=>b.onclick=()=>{MG.pg[t]+=+b.dataset.pg;mgDraw()});
+ $("#mgall").onchange=e=>{sel.forEach(r=>e.target.checked?S.add(r[T.key]):S.delete(r[T.key]));mgDraw()};
+ $$("[data-k]").forEach(c=>c.onchange=()=>{const r=all.find(x=>String(x[T.key])===c.dataset.k);if(!r)return;c.checked?S.add(r[T.key]):S.delete(r[T.key]);mgDraw()});
+ $$("[data-e]").forEach(b=>b.onclick=()=>mgForm(t,all.find(x=>String(x[T.key])===b.dataset.e)));
+ const reload=()=>{S.clear();MG.data[t]=null;if(t==="results")MG.idx=null;mgShow()};
+ if($("#mgdel"))$("#mgdel").onclick=async()=>{const keys=[...S];if(!keys.length)return;
+  if(!await confirmBox(`Delete <b>${keys.length}</b> ${T.name} permanently? This cannot be undone.`,keys.length>=5?"DELETE":""))return;
+  toast("Deleting…");const ok=await delKeys(t,keys);toast(ok?"Deleted.":"Some items could not be deleted.");reload()};
+ if($("#mgon"))$("#mgon").onclick=async()=>{const ok=await patchKeys(t,[...S],{active:true});toast(ok?"Activated.":"Failed.");reload()};
+ if($("#mgoff"))$("#mgoff").onclick=async()=>{const ok=await patchKeys(t,[...S],{active:false});toast(ok?"Deactivated.":"Failed.");reload()};
+ if($("#mgadd"))$("#mgadd").onclick=()=>mgForm(t,null);
+ if($("#mgback"))$("#mgback").onclick=()=>{MG.rf.on=false;MG.data.results=null;MG.sel.results.clear();mgShow()};
+ if($("#mgcsv"))$("#mgcsv").onclick=()=>{const c=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+  const csv="\ufeff"+(t==="results"?"Student,Class,Assessment,Year,Marks,Out of,Percent,Grade,Result,Tab switches,Penalty,Submitted\n"+f.map(r=>[r.name,r.cls,r.title,r.year,r.total,r.max_marks,r.pct,r.grade,r.pct>=50?"PASS":"FAIL",r.tabs,r.pen,r.submitted_at].map(c).join(",")).join("\n")
+   :"Name,Class,Year,Adm no,Sex,Active\n"+f.map(r=>[r.name,r.cls,r.year,r.adm,r.sex,r.active?"yes":"no"].map(c).join(",")).join("\n"));
+  saveData(t+".csv",new Blob([csv],{type:"text/csv;charset=utf-8"}))};
+ if($("#mgrv"))$("#mgrv").onclick=async()=>{const nv=!_reveal;const r=await sb("/rest/v1/settings?on_conflict=key",{method:"POST",body:JSON.stringify({key:"reveal",value:nv}),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
+  if(r.ok){_reveal=nv;mgDraw()}else toast("Could not change this setting.")}}
+function mgForm(t,row){const add=!row;
+ const F={results:[["name","Student name","text"],["cls","Class","text"],["total","Marks scored","number"]],
+  students:[["name","Full name","text"],["cls","Class (e.g. 9G AL QAMAR)","text"],["year","Year","number"],["adm","Adm. no (optional)","text"],["sex","Sex","sel"],["active","Can sit exams","bool"]],
+  teachers:[["name","Name","text"],["email","Email (same as Supabase login)","email"],["reg","Reg no (optional)","text"]]}[t];
+ const R=row||{active:true,sex:"M",year:7};
+ const inp=([k,l,ty])=>`<label for="mf_${k}">${l}</label>`+(ty==="sel"?`<select id="mf_${k}"><option value="M"${R[k]==="M"?" selected":""}>M</option><option value="F"${R[k]==="F"?" selected":""}>F</option></select>`
+  :ty==="bool"?`<select id="mf_${k}"><option value="1"${R[k]?" selected":""}>Yes</option><option value="0"${R[k]?"":" selected"}>No</option></select>`
+  :`<input id="mf_${k}" type="${ty}" value="${sx(R[k])}"${t==="teachers"&&k==="email"&&!add?" readonly":""}${ty==="number"?' step="any"':""}>`);
+ const o=mgModal(`<h2>${add?"Add":"Edit"} ${t==="students"?"student":t==="teachers"?"teacher":"result"}</h2>${t==="results"?`<p class="note">${sx(R.title)}. Out of ${sx(R.max_marks)}. Percent and grade update automatically.</p>`:""}${F.map(inp).join("")}<div id="mfe"></div><div class="row"><button class="btn" id="mfs">Save</button><button class="btn alt" id="mfc">Cancel</button></div>`);
+ o.querySelector("#mfc").onclick=()=>o.remove();
+ o.querySelector("#mfs").onclick=async()=>{const v=k=>o.querySelector("#mf_"+k).value.trim(),bad=m=>{o.querySelector("#mfe").innerHTML='<div class="msg bad">'+m+'</div>'};
+  let r;
+  if(t==="students"){const name=v("name").replace(/\s+/g," ").toUpperCase(),cls=v("cls").replace(/\s+/g," ").toUpperCase(),yr=+v("year");
+   if(!name||!cls||!(yr>=1&&yr<=13))return bad("Name, class and a valid year are required.");
+   const b={name,cls,year:yr,adm:v("adm")||null,sex:v("sex"),active:v("active")==="1"};
+   r=add?await sb("/rest/v1/roster",{method:"POST",body:JSON.stringify(b),headers:{Prefer:"return=minimal"}}):await sb("/rest/v1/roster?id=eq."+row.id,{method:"PATCH",body:JSON.stringify(b),headers:{Prefer:"return=minimal"}})}
+  else if(t==="teachers"){const name=v("name"),email=v("email").toLowerCase();if(!name||!/^\S+@\S+\.\S+$/.test(email))return bad("Enter a name and a valid email.");
+   const b={name,reg:v("reg")};
+   r=add?await sb("/rest/v1/staff_users",{method:"POST",body:JSON.stringify({...b,email,role:"teacher"}),headers:{Prefer:"return=minimal"}}):await sb("/rest/v1/staff_users?email=eq."+enc(row.email),{method:"PATCH",body:JSON.stringify(b),headers:{Prefer:"return=minimal"}})}
+  else{const mx=+row.max_marks||0,tot=Math.min(Math.max(+v("total"),0),mx);if(!isFinite(tot)||v("total")==="")return bad("Enter the marks.");const pct=mx?Math.round(tot/mx*100):0;
+   r=await sb("/rest/v1/results?id=eq."+row.id,{method:"PATCH",body:JSON.stringify({name:v("name"),cls:v("cls"),total:tot,pct,grade:GRADE(pct)}),headers:{Prefer:"return=minimal"}})}
+  if(!r.ok)return bad(r.status===409?"That one already exists.":r.status===403?"Not allowed. Only the main admin can change students and teachers.":"Could not save. Try again.");
+  o.remove();toast("Saved.");MG.sel[t].clear();MG.data[t]=null;mgShow()}}
+async function mgDiag(){const box=$("#mgbody");
+ box.innerHTML=`<p class="note">Checks the whole chain: your login, the database, the marking function and the class list. A test result is saved and removed again.</p><div class="row"><button class="btn" id="dg">Run connection test</button></div><div id="dgo"></div>`;
+ $("#dg").onclick=async()=>{const out=$("#dgo");out.innerHTML='<p class="note">Testing…</p>';const L=[];const add=(ok,n,d)=>L.push(`<tr><td>${ok?"✅":"❌"}</td><td><b>${sx(n)}</b>${d?`<br><span class="note">${sx(d)}</span>`:""}</td></tr>`);
+  const p=await rpc("get_portal");add(p.ok,"Portal data loads from Supabase",p.ok?"":"Status "+p.status);
+  const rr=await rows("results","select=id&limit=1");add(rr.ok,"Staff login can read results",rr.ok?"":"Status "+rr.status+". Log out and in again.");
+  let fr=null;try{fr=await fetch(SB+"/functions/v1/submit-exam",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+(ss_get("ca_tok")||SUPABASE_ANON_KEY),"Content-Type":"application/json"},body:JSON.stringify({action:"diag"})})}catch(e){}
+  if(!fr)add(false,"Marking function submit-exam is reachable","No answer from the server. Check that the function is deployed with exactly this name.");
+  else if(fr.status===404)add(false,"Marking function submit-exam is deployed","Not found. Edge Functions → Deploy a new function → name it exactly: submit-exam");
+  else if(fr.status===401)add(false,"Marking function accepts requests","Rejected (401). Open the function in Supabase and turn OFF 'Verify JWT', then deploy again.");
+  else{let j=null;try{j=await fr.json()}catch(e){}
+   if(!j||!j.checks)add(false,"Marking function runs",j&&j.msg?j.msg:"Status "+fr.status+". Redeploy the latest submit-exam.ts.");
+   else j.checks.forEach(c=>add(c.ok,c.name,c.detail))}
+  out.innerHTML=`<div class="tw"><table>${L.join("")}</table></div><p class="note">If everything is ✅ but a student still sees no result: make sure the student tested in a private window. When you are logged in as staff, exam results are not saved on purpose (preview only).</p>`}}
+
 if(REMOTE){setInterval(()=>{if(!EX&&!isStaff()&&!/^#\/(view|preview)\//.test(location.hash))API.init()},90000)}
 app.innerHTML='<div class="empty">Loading…</div>';
 API.init().then(ok=>{if(!ok&&REMOTE)toast("Cannot reach the server. Check your internet connection and refresh.");route()});
