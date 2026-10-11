@@ -989,10 +989,11 @@ function mgDraw(){const t=MG.tab,T=TB[t],all=MG.data[t],f=filt(t),can=T.admin?is
  if(t==="students")bulk+=`<button class="btn sm" id="mgon"${dis}>Activate selected</button><button class="btn sm alt" id="mgoff"${dis}>Deactivate selected</button>`;
  if(t!=="teachers")bulk+=`<button class="btn sm alt" id="mgcsv">Download CSV (${f.length})</button>`;
  if(t==="results")bulk+=`<button class="btn sm alt" id="mgback">← Classes</button><button class="btn sm alt" id="mgrv">Correct answers shown to students: ${_reveal?"ON":"OFF"}</button>`;
+ if(t==="results")bulk+=`<button class="btn sm" id="mgzip">Download marked papers (ZIP${n?", "+n+" selected":", "+f.length+" shown"})</button>`;
  if(t!=="results"&&can)bulk+=`<button class="btn sm" id="mgadd">+ Add ${t==="students"?"student":"teacher"}</button>`;
  const head=`<th><input type="checkbox" id="mgall" aria-label="Select all"${allOn?" checked":""}${can?"":" disabled"}></th>${T.cols.map(c=>`<th>${c[0]}</th>`).join("")}<th></th>`;
  const body=show.map(r=>{const k=sx(r[T.key]),lk=T.lock&&T.lock(r);
-  return `<tr><td><input type="checkbox" data-k="${k}"${S.has(r[T.key])?" checked":""}${(!can||lk)?" disabled":""}></td>${T.cols.map(c=>`<td>${sx(typeof c[1]==="function"?c[1](r):r[c[1]])}</td>`).join("")}<td>${can&&!lk||t==="results"?`<button class="btn sm alt" data-e="${k}">Edit</button>`:""}</td></tr>`}).join("");
+  return `<tr><td><input type="checkbox" data-k="${k}"${S.has(r[T.key])?" checked":""}${(!can||lk)?" disabled":""}></td>${T.cols.map(c=>`<td>${sx(typeof c[1]==="function"?c[1](r):r[c[1]])}</td>`).join("")}<td>${t==="results"?`<button class="btn sm alt" data-pdf="${k}">PDF</button> `:""}${can&&!lk||t==="results"?`<button class="btn sm alt" data-e="${k}">Edit</button>`:""}</td></tr>`}).join("");
  $("#mgbody").innerHTML=`<div class="row" style="flex-wrap:wrap;gap:8px">${tools}</div>
 <p class="note">${f.length} of ${all.length} shown. ${n?`<b>${n} selected.</b> `:""}${!can?"Only the main admin can change this list.":"Tick the box at the top of the table to select all "+f.length+" (all pages)."}</p>
 <div class="row" style="flex-wrap:wrap;gap:8px">${bulk}</div>
@@ -1004,6 +1005,8 @@ function mgDraw(){const t=MG.tab,T=TB[t],all=MG.data[t],f=filt(t),can=T.admin?is
  $("#mgall").onchange=e=>{sel.forEach(r=>e.target.checked?S.add(r[T.key]):S.delete(r[T.key]));mgDraw()};
  $$("[data-k]").forEach(c=>c.onchange=()=>{const r=all.find(x=>String(x[T.key])===c.dataset.k);if(!r)return;c.checked?S.add(r[T.key]):S.delete(r[T.key]);mgDraw()});
  $$("[data-e]").forEach(b=>b.onclick=()=>mgForm(t,all.find(x=>String(x[T.key])===b.dataset.e)));
+ $$("[data-pdf]").forEach(b=>b.onclick=()=>mgPdfOne(b));
+ if($("#mgzip"))$("#mgzip").onclick=()=>mgPdfZip(n?all.filter(r=>S.has(r.id)):f,$("#mgzip"));
  const reload=()=>{S.clear();MG.data[t]=null;if(t==="results")MG.idx=null;mgShow()};
  if($("#mgdel"))$("#mgdel").onclick=async()=>{const keys=[...S];if(!keys.length)return;
   if(!await confirmBox(`Delete <b>${keys.length}</b> ${T.name} permanently? This cannot be undone.`,keys.length>=5?"DELETE":""))return;
@@ -1018,7 +1021,7 @@ function mgDraw(){const t=MG.tab,T=TB[t],all=MG.data[t],f=filt(t),can=T.admin?is
   saveData(t+".csv",new Blob([csv],{type:"text/csv;charset=utf-8"}))};
  if($("#mgrv"))$("#mgrv").onclick=async()=>{const nv=!_reveal;const r=await sb("/rest/v1/settings?on_conflict=key",{method:"POST",body:JSON.stringify({key:"reveal",value:nv}),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
   if(r.ok){_reveal=nv;mgDraw()}else toast("Could not change this setting.")}}
-function mgForm(t,row){const add=!row;
+function mgForm(t,row){if(t==="results"&&row)return mgResEdit(row);const add=!row;
  const F={results:[["name","Student name","text"],["cls","Class","text"],["total","Marks scored","number"]],
   students:[["name","Full name","text"],["cls","Class (e.g. 9G AL QAMAR)","text"],["year","Year","number"],["adm","Adm. no (optional)","text"],["sex","Sex","sel"],["active","Can sit exams","bool"]],
   teachers:[["name","Name","text"],["email","Email (same as Supabase login)","email"],["reg","Reg no (optional)","text"]]}[t];
@@ -1058,6 +1061,107 @@ async function mgDiag(){const box=$("#mgbody");
 if(REMOTE){setInterval(()=>{if(!EX&&!isStaff()&&!/^#\/(view|preview)\//.test(location.hash))API.init()},90000)}
 app.innerHTML='<div class="empty">Loading…</div>';
 API.init().then(ok=>{if(!ok&&REMOTE)toast("Cannot reach the server. Check your internet connection and refresh.");route()});
+
+/* ===== Marked-paper PDF + per-question result editing (added) ===== */
+const _libs={};
+const loadLib=u=>_libs[u]||(_libs[u]=new Promise((res,rej)=>{const s=document.createElement("script");s.src=u;s.onload=res;s.onerror=()=>{delete _libs[u];rej(new Error("Could not load "+u+". Check internet."))};document.head.appendChild(s)}));
+const LIB_PDF="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",LIB_ZIP="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+const KEYC={};
+async function getKey(aid){if(!aid)return null;if(KEYC[aid]!==undefined)return KEYC[aid];
+ const r=await rows("exam_keys","aid=eq."+enc(aid)+"&select=data");KEYC[aid]=r.ok&&r.j&&r.j[0]?r.j[0].data:null;return KEYC[aid]}
+async function getFull(id){const r=await rows("results","id=eq."+enc(id)+"&select=*");return r.ok&&r.j&&r.j[0]||null}
+const r2=v=>Math.round((+v||0)*100)/100;
+const strip=s=>String(s==null?"":s).replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&").replace(/\s+/g," ").trim();
+const pf=s=>strip(s).replace(/→/g,"->").replace(/[–—]/g,"-").replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"?");
+const safeFn=s=>String(s||"").replace(/[^a-z0-9]+/gi,"_").replace(/^_+|_+$/g,"");
+function staffEmail(){try{const t=ss_get("ca_tok");return t?(JSON.parse(atob(t.split(".")[1].replace(/-/g,"+").replace(/_/g,"/"))).email||""):""}catch(e){return""}}
+/* questions in the same order/ids the server used when marking */
+function qList(key){const out=[];let n=0;if(!key||!Array.isArray(key.sections))return out;
+ key.sections.forEach((s,si)=>(s.questions||[]).forEach((q,qi)=>out.push({id:"q"+si+"_"+qi,n:++n,si,sec:s.name,marks:+q.marks||0,prompt:q.prompt})));return out}
+
+function buildPdf(row,key){
+ const {jsPDF}=window.jspdf,doc=new jsPDF({unit:"pt",format:"a4"});
+ const mx=40,pw=doc.internal.pageSize.getWidth(),ph=doc.internal.pageSize.getHeight(),maxW=pw-mx*2;let y=50;
+ const ensure=h=>{if(y+h>ph-45){doc.addPage();y=50}};
+ const wrap=(t,size,style,col)=>{doc.setFont("helvetica",style||"normal");doc.setFontSize(size||10);const c=col||[30,30,30];doc.setTextColor(c[0],c[1],c[2]);
+  const L=doc.splitTextToSize(pf(t),maxW);ensure(L.length*size*1.2+4);doc.text(L,mx,y);y+=L.length*size*1.2+4};
+ doc.setFont("helvetica","bold");doc.setFontSize(14);doc.setTextColor(26,58,107);doc.text("Al Muntazir Islamic Int'l School",mx,y);y+=18;
+ doc.setFont("helvetica","normal");doc.setFontSize(10);doc.setTextColor(80,80,80);doc.text(pf((row.title||"Assessment")+" - Marked Paper"),mx,y);y+=20;
+ doc.setDrawColor(220,220,220);doc.line(mx,y,pw-mx,y);y+=16;
+ wrap("Student: "+row.name+"    Class: "+(row.cls||"")+"    Campus: "+(row.cand||""),11,"bold");
+ wrap("Total: "+row.total+"/"+row.max_marks+"    Percentage: "+row.pct+"%    Grade: "+row.grade+"    "+(row.pct>=50?"PASS":"FAIL"),11,"bold");
+ if(+row.pen>0)wrap("Raw score "+row.raw+" minus security penalty "+row.pen+" ("+(row.tabs||0)+" tab-switch violation(s))",9.5,"normal",[200,30,30]);
+ y+=6;
+ const D=Array.isArray(row.detail)?row.detail:[],byId={};D.forEach(d=>byId[d.id]=d);
+ const Q=qList(key);
+ if(!Q.length){D.forEach((d,i)=>Q.push({id:d.id,n:i+1,si:0,sec:"",marks:null,prompt:"Question "+(i+1)}))}
+ let cur=-1;
+ Q.forEach(q=>{
+  if(q.si!==cur){cur=q.si;if(q.sec||key){ensure(30);doc.setFillColor(26,58,107);doc.rect(mx,y-11,maxW,18,"F");doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(10.5);
+   const sc=(row.secs||[])[q.si];doc.text(pf("SECTION "+(q.si+1)+" - "+(q.sec||"")+(sc?"  ("+sc[1]+"/"+sc[2]+")":"")),mx+6,y+1);y+=20}}
+  const d=byId[q.id]||{e:0,g:"",c:""},full=q.marks!=null&&d.e>=q.marks-1e-9,part=!full&&d.e>0,col=full?[22,163,74]:part?[217,119,6]:[220,38,38];
+  wrap(q.n+". "+(strip(q.prompt)||"(question text not available)"),10,"bold",[20,20,20]);
+  wrap("Student answer: "+(String(d.g||"").trim()||"No answer given"),9.5,"normal",[60,60,60]);
+  ensure(14);doc.setFont("helvetica","bold");doc.setFontSize(9.5);doc.setTextColor(col[0],col[1],col[2]);
+  doc.text((full?"CORRECT":part?"PARTIAL":"WRONG")+" ("+d.e+(q.marks!=null?"/"+q.marks:"")+" mark)",mx,y);y+=13;
+  if(!full&&d.c)wrap("Correct answer: "+d.c,9,"italic",[90,90,90]);
+  y+=6});
+ const N=doc.internal.getNumberOfPages();for(let i=1;i<=N;i++){doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(140,140,140);doc.text("Page "+i+" of "+N,pw-mx,ph-22,{align:"right"})}
+ return doc}
+const pdfName=r=>safeFn(r.name)+"_"+safeFn(r.cls)+"_"+safeFn(r.title)+".pdf";
+async function mgPdfOne(b){const id=b.dataset.pdf,old=b.textContent;b.disabled=true;b.textContent="…";
+ try{await loadLib(LIB_PDF);const row=await getFull(id);if(!row)throw new Error("Could not load that result.");
+  if(!Array.isArray(row.detail)||!row.detail.length)throw new Error("This result has no question details, so no marked paper can be made.");
+  const key=await getKey(row.aid);saveData(pdfName(row),buildPdf(row,key).output("blob"))}
+ catch(e){toast(e.message||"Could not make the PDF.")}
+ b.disabled=false;b.textContent=old}
+async function mgPdfZip(list,b){if(!list.length){toast("Nothing to download.");return}
+ const old=b.textContent;b.disabled=true;
+ try{await Promise.all([loadLib(LIB_PDF),loadLib(LIB_ZIP)]);const zip=new JSZip(),used={};let done=0,skip=0;
+  for(let i=0;i<list.length;i+=40){const part=list.slice(i,i+40);
+   const r=await rows("results","id=in."+enc("("+part.map(x=>x.id).join(",")+")")+"&select=*");if(!r.ok)throw new Error("Could not load results. Log in again.");
+   for(const row of r.j||[]){b.textContent="Making PDFs "+(++done)+"/"+list.length+"…";
+    if(!Array.isArray(row.detail)||!row.detail.length){skip++;continue}
+    const key=await getKey(row.aid);let nm=pdfName(row);if(used[nm])nm=nm.replace(/\.pdf$/,"_"+row.id+".pdf");used[nm]=1;
+    zip.file(nm,buildPdf(row,key).output("arraybuffer"));
+    if(done%10===0)await new Promise(z=>setTimeout(z))}}
+  const blob=await zip.generateAsync({type:"blob"});saveData("marked_papers_"+new Date().toISOString().slice(0,10)+".zip",blob);
+  toast("ZIP ready: "+(done-skip)+" PDF(s)"+(skip?", "+skip+" skipped (no details).":"."))}
+ catch(e){toast(e.message||"Could not make the ZIP.")}
+ b.disabled=false;b.textContent=old}
+
+/* Edit a result question by question; totals, percent, grade and section scores are recalculated */
+async function mgResEdit(row){
+ const o=mgModal('<h2>Edit result</h2><p class="note">Loading…</p>');o.firstChild.style.maxWidth="760px";
+ const full=await getFull(row.id);if(!full){o.remove();toast("Could not load that result.");return}
+ const key=await getKey(full.aid),Q=qList(key),D=Array.isArray(full.detail)?full.detail:[],byId={};D.forEach(d=>byId[d.id]=d);
+ const hasQ=D.length>0,mx=+full.max_marks||0;
+ const qrows=hasQ?(Q.length?Q:D.map((d,i)=>({id:d.id,n:i+1,marks:null,prompt:"Question "+(i+1)}))).map(q=>{const d=byId[q.id]||{e:0,g:""};
+  return`<tr><td>${q.n}</td><td>${sx(pf(q.prompt).slice(0,90))}</td><td>${sx(pf(d.g||"").slice(0,60))||"<i>none</i>"}</td><td><input type="number" step="any" min="0"${q.marks!=null?' max="'+q.marks+'"':""} data-q="${sx(q.id)}" value="${d.e}" style="width:70px"> / ${q.marks!=null?q.marks:"?"}</td></tr>`}).join(""):"";
+ o.firstChild.innerHTML=`<h2>Edit result</h2><p class="note">${sx(full.title)}. Out of ${sx(mx)}. ${hasQ?"Change the mark of any question. Total, percent, grade and section scores update automatically.":"This result has no question details, so only the total can be changed."}</p>
+ <label for="re_name">Student name</label><input id="re_name" value="${sx(full.name)}"><label for="re_cls">Class</label><input id="re_cls" value="${sx(full.cls)}"><label for="re_cand">Campus</label><input id="re_cand" value="${sx(full.cand)}">
+ ${hasQ?`<label for="re_pen">Penalty (marks removed for tab switching)</label><input id="re_pen" type="number" step="any" min="0" value="${sx(full.pen||0)}"><div class="tw" style="margin-top:10px"><table><tr><th>#</th><th>Question</th><th>Student answer</th><th>Marks</th></tr>${qrows}</table></div>`
+  :`<label for="re_tot">Marks scored</label><input id="re_tot" type="number" step="any" min="0" value="${sx(full.total)}">`}
+ <p class="note" id="re_sum"></p><div id="mfe"></div><div class="row"><button class="btn" id="mfs">Save</button><button class="btn alt" id="mfc">Cancel</button></div>`;
+ const bad=m=>{o.querySelector("#mfe").innerHTML='<div class="msg bad">'+m+'</div>'};
+ const calc=()=>{if(!hasQ){const t=Math.min(Math.max(+o.querySelector("#re_tot").value||0,0),mx);return{raw:t,pen:0,total:t}}
+  let raw=0;o.querySelectorAll("[data-q]").forEach(i=>{const m=i.max!==""?+i.max:Infinity;raw+=Math.min(Math.max(+i.value||0,0),m)});raw=r2(raw);
+  const pen=Math.min(Math.max(+o.querySelector("#re_pen").value||0,0),raw);return{raw,pen,total:Math.max(0,r2(raw-pen))}};
+ const show=()=>{const c=calc(),p=mx?Math.round(c.total/mx*100):0;o.querySelector("#re_sum").innerHTML=`New total: <b>${c.total}/${mx}</b> (${p}%, grade ${GRADE(p)})`};
+ o.addEventListener("input",show);show();
+ o.querySelector("#mfc").onclick=()=>o.remove();
+ o.querySelector("#mfs").onclick=async()=>{const name=o.querySelector("#re_name").value.trim();if(!name)return bad("Student name is required.");
+  const c=calc(),pct=mx?Math.round(c.total/mx*100):0,body={name,cls:o.querySelector("#re_cls").value.trim(),cand:o.querySelector("#re_cand").value.trim(),total:c.total,pct,grade:GRADE(pct)};
+  if(hasQ){const nd=D.map(d=>{const i=o.querySelector('[data-q="'+d.id+'"]');if(!i)return d;const m=i.max!==""?+i.max:Infinity;return{...d,e:r2(Math.min(Math.max(+i.value||0,0),m))}});
+   body.detail=nd;body.raw=c.raw;body.pen=c.pen;
+   if(key&&Array.isArray(key.sections)){const eMap={};nd.forEach(d=>eMap[d.id]=d.e);body.secs=key.sections.map((s,si)=>[s.name,r2((s.questions||[]).reduce((t,q,qi)=>t+(eMap["q"+si+"_"+qi]||0),0)),r2((s.questions||[]).reduce((t,q)=>t+(+q.marks||0),0))])}}
+  const mark={edited_at:new Date().toISOString(),edited_by:staffEmail()||null};
+  const hd={Prefer:"return=minimal"},url="/rest/v1/results?id=eq."+enc(full.id);
+  let r=await sb(url,{method:"PATCH",body:JSON.stringify({...body,...mark}),headers:hd});
+  if(!r.ok&&r.status===400)r=await sb(url,{method:"PATCH",body:JSON.stringify(body),headers:hd}); // columns edited_at/edited_by not created yet
+  if(!r.ok)return bad(r.status===403?"Not allowed.":"Could not save. Try again.");
+  o.remove();toast("Saved.");MG.sel.results.clear();MG.data.results=null;mgShow()}}
+
 </script>
 
 </body></html>
