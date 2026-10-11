@@ -1274,5 +1274,222 @@ function bindPw(){const b=$("#pw_go");if(!b)return;
 })();
 
 </script>
+<!-- ============================================================
+ PORTAL UPGRADE BLOCK (haigusi Supabase wala links zako)
+ JINSI YA KUWEKA: copy kuanzia <style> hadi </script> ya mwisho,
+ kisha paste MOJA KWA MOJA KABLA ya  </body></html>  ya index.html yako
+ (baada ya script kuu). Hakuna kitu kingine kinachobadilishwa.
+============================================================ -->
+<style id="up-css">
+html{scroll-behavior:smooth}
+body{background:radial-gradient(1100px 480px at 85% -8%,rgba(29,63,143,.12),transparent 70%),radial-gradient(900px 420px at -5% 10%,rgba(184,146,58,.10),transparent 70%),var(--bg);background-attachment:fixed}
+@keyframes up-rise{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes up-pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
+#app>*{animation:up-rise .6s cubic-bezier(.2,.7,.2,1) both}
+#app>*:nth-child(2){animation-delay:.07s}#app>*:nth-child(3){animation-delay:.13s}#app>*:nth-child(4){animation-delay:.19s}#app>*:nth-child(n+5){animation-delay:.24s}
+#app>.grid>*{animation:up-rise .6s cubic-bezier(.2,.7,.2,1) both}
+#app>.grid>*:nth-child(1){animation-delay:.10s}#app>.grid>*:nth-child(2){animation-delay:.16s}#app>.grid>*:nth-child(3){animation-delay:.22s}#app>.grid>*:nth-child(4){animation-delay:.28s}#app>.grid>*:nth-child(n+5){animation-delay:.34s}
+header{box-shadow:0 8px 28px rgba(5,12,30,.35);backdrop-filter:saturate(1.4) blur(6px)}
+nav a{border-radius:6px 6px 0 0;transition:color .25s,border-color .25s,background .25s,transform .25s}
+nav a:hover{background:rgba(255,255,255,.06);transform:translateY(-1px)}
+.hero{box-shadow:0 24px 50px -18px rgba(11,26,58,.55);border-radius:14px}
+.btn{border-radius:10px;letter-spacing:.02em;box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 4px 10px rgba(11,26,58,.18),0 12px 26px -10px rgba(11,26,58,.35)}
+.btn:not(.ghost):not(.alt):not(.danger){background-image:linear-gradient(180deg,#e0c070,#b8923a)}
+.btn.danger{background-image:linear-gradient(180deg,#cf4b44,#962a25)}
+.btn.alt{background-color:var(--card);box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 3px 8px rgba(11,26,58,.12),0 10px 22px -12px rgba(11,26,58,.3)}
+.btn.ghost{backdrop-filter:blur(5px);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.btn:not(:disabled):active{transform:translateY(1px) scale(.97);box-shadow:0 2px 5px rgba(11,26,58,.25)}
+.card,.panel,.tile,.lv,.dtabs{border-radius:12px}
+a.card,button.card{--r:12px}
+.card,.panel{box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 6px 18px rgba(11,26,58,.07),0 22px 40px -26px rgba(11,26,58,.35)}
+.tile{box-shadow:0 6px 16px rgba(11,26,58,.08);transition:transform .3s,box-shadow .3s}.tile:hover{transform:translateY(-3px);box-shadow:0 14px 28px -10px rgba(11,26,58,.3)}
+.dtabs{box-shadow:0 8px 24px -10px rgba(11,26,58,.35);backdrop-filter:blur(8px)}
+.dt{transition:background .25s,color .25s,transform .25s,box-shadow .25s}.dt:hover{transform:translateY(-1px)}.dt.on{box-shadow:0 6px 14px rgba(11,26,58,.35)}
+.lv{box-shadow:0 4px 14px rgba(11,26,58,.08);transition:transform .25s,box-shadow .25s,border-color .25s}.lv:hover{transform:translateY(-2px);box-shadow:0 12px 26px -10px rgba(11,26,58,.3)}
+table{border-collapse:separate;border-spacing:0}tr td{transition:background .2s}
+th{position:sticky;top:0;background:var(--card)}
+input[type=checkbox]{width:17px;height:17px;accent-color:var(--royal);cursor:pointer;transition:transform .15s}input[type=checkbox]:active{transform:scale(.85)}
+input,select,textarea{border-radius:8px;transition:border-color .25s,box-shadow .25s,background .25s}
+.msg,.toast{border-radius:10px;box-shadow:0 8px 22px -10px rgba(11,26,58,.4)}
+.toast{animation:up-pop .3s both}
+.tag{transition:transform .2s}.tag:hover{transform:translateY(-1px)}
+/* class cards for live exams */
+.cc{text-align:left;width:100%;font:inherit;color:inherit;cursor:pointer}
+.cc h3{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.cc.help{border-top-color:var(--bad);box-shadow:0 0 0 2px var(--bad-line),0 10px 26px -12px rgba(168,50,45,.55)}
+.cc .big{font:700 2rem/1 var(--serif)}
+.lvbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:4px 0 6px}
+/* reports */
+.rp{font:15px/1.55 var(--sans,system-ui,sans-serif);color:var(--ink,#16213b);max-width:980px;margin:auto}
+.rp h2{font-family:var(--serif,Georgia,serif);font-size:1.7rem;margin:22px 0 6px;border-bottom:3px solid #b8923a;padding-bottom:6px}
+.rp h3{font-size:1.1rem;margin:18px 0 8px;color:var(--royal,#1d3f8f)}
+.rp .k{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:10px 0}
+.rp .k div{background:var(--field,#f5f6f9);border-left:4px solid #b8923a;border-radius:8px;padding:10px 12px}.rp .k b{display:block;font:700 1.6rem/1.1 var(--serif,Georgia,serif)}
+.rp .bar{background:rgba(120,130,160,.22);border-radius:6px;height:10px;overflow:hidden;min-width:80px}.rp .bar i{display:block;height:100%;border-radius:6px}
+.rp .ok{background:#1d7a4d}.rp .mid{background:#d9961a}.rp .bad{background:#a8322d}
+.rp .chip{display:inline-block;padding:2px 10px;border-radius:20px;color:#fff;font-size:.78rem;font-weight:700}
+.rp table{width:100%;border-collapse:collapse;font-size:.88rem}.rp td,.rp th{border-bottom:1px solid rgba(120,130,160,.3);padding:7px 6px;text-align:left;vertical-align:top;position:static}
+.rp .rec{border-left:4px solid #a8322d;background:rgba(168,50,45,.07);border-radius:8px;padding:10px 14px;margin:8px 0}.rp .rec.mid{border-color:#d9961a;background:rgba(217,150,26,.09)}.rp .rec.ok{border-color:#1d7a4d;background:rgba(29,122,77,.08)}
+.rp .rec ul{margin:6px 0 0;padding-left:20px}
+</style>
+
+<script id="up-js">
+(function(){
+const nz=s=>String(s||"").toUpperCase().replace(/\s+/g," ").trim();
+const ACT=["active","help","paused"],DONE=["done","ended"];
+let RM=null,RML=false,LC=null;const LSEL=new Set();
+
+/* ---------- 1. LIVE EXAMS GROUPED BY CLASS ---------- */
+function loadRM(){if(RM||RML||!REMOTE||!isStaff())return;RML=true;
+ fetchAll("roster","select=name,cls,year&order=id").then(d=>{RM={};(d||[]).forEach(r=>RM[nz(r.name)]=r.cls)}).catch(()=>{RM={}}).then(()=>{RML=false;liveSig=""})}
+const clsOf=s=>(RM&&RM[nz(s.name)])||("Year "+s.year);
+
+function stuCard(s,n){
+ const off=ACT.includes(s.state)&&n-(s.hb||0)>15000,v=s.viol||[],sid=esc(s.sid),live=ACT.includes(s.state),fin=DONE.includes(s.state);let btn="";
+ if(s.state==="help")btn=`<button class="btn sm" data-lc="allow" data-sid="${sid}">Pause exam and allow leave</button><button class="btn sm alt" data-lc="deny" data-sid="${sid}">Not now</button><button class="btn sm danger" data-lc="end" data-sid="${sid}">End exam</button>`;
+ else if(s.state==="active")btn=`<button class="btn sm alt" data-lc="allow" data-sid="${sid}">Pause and allow leave</button><button class="btn sm danger" data-lc="end" data-sid="${sid}">End exam</button>`;
+ else if(s.state==="paused")btn=`<button class="btn sm" data-lc="resume" data-sid="${sid}">Resume exam</button><button class="btn sm danger" data-lc="end" data-sid="${sid}">End exam</button>`;
+ else btn=`<button class="btn sm danger" data-ldel="${sid}">Delete student</button>`;
+ const acked=(s.ackN||0)>=(s.msgN||0),ms=s.msgs||[];
+ return `<div class="lv ${esc(s.state)}"><div class="lv-h">${fin?`<input type="checkbox" data-lsel="${sid}" aria-label="Select"${LSEL.has(s.sid)?" checked":""}>`:""}<strong>${esc(s.name)}</strong><span class="tag">${esc(clsOf(s))}</span><span>${esc(s.title)}</span><span class="tag ${s.state==="help"?"bad":fin?"ok":""}">${STL[s.state]||esc(s.state)}</span>${off?'<span class="tag bad">No signal</span>':""}${v.length?`<span class="tag bad">${v.length} warning${v.length>1?"s":""}</span>`:""}${s.warns?`<span class="tag bad">${s.warns} formal warning${s.warns>1?"s":""} issued</span>`:""}</div>
+${s.state==="help"&&s.help?`<p class="lv-r"><b>${esc(s.help.reason)}</b>${s.help.note?" “"+esc(s.help.note)+"”":""}</p>`:""}
+${v.length?`<details><summary>Activity log</summary><ul>${v.slice(-8).reverse().map(x=>`<li>${new Date(x.t).toLocaleTimeString("en-GB")} · ${esc(x.msg)}</li>`).join("")}</ul></details>`:""}
+${ms.length?`<details><summary>Messages sent (${s.msgN}) · last one ${acked?"acknowledged":"waiting for the student"}</summary><ul>${ms.slice().reverse().map(x=>`<li>${new Date(x.t).toLocaleTimeString("en-GB")} · ${LV[x.level]||""}: ${esc(x.text)}</li>`).join("")}</ul></details>`:""}
+${live?`<details data-ok="${sid}"${dr(s.sid).o?" open":""}><summary>Send a message to ${esc(s.name)}</summary>${compose(s.sid,s.name)}</details>`:""}
+<div class="row">${btn}</div></div>`}
+
+refreshLive=function(L){
+ const box=$("#live");if(!box)return;loadRM();
+ if(!box.__up){box.__up=1;box.addEventListener("click",liveClick,true)}
+ const n=Date.now();
+ L=L.slice().sort((a,b)=>(b.state==="help")-(a.state==="help")||String(a.name).localeCompare(b.name));
+ const nh=L.filter(s=>s.state==="help").length,bd=$("#lvbadge");
+ if(bd){bd.hidden=!nh;bd.textContent=nh}
+ {const tb=$("#tbadge");if(tb){tb.hidden=!nh;tb.textContent=nh}const a=$("#tlive");if(a)a.textContent=L.filter(s=>ACT.includes(s.state)).length;const h=$("#thelp");if(h)h.textContent=nh}
+ const sig=JSON.stringify([LC,RM?1:0,[...LSEL],L.map(s=>({...s,hb:n-(s.hb||0)>15000}))]);
+ if(sig===liveSig)return;
+ const ae=document.activeElement;if(ae&&box.contains(ae)&&/^(TEXTAREA|SELECT)$/.test(ae.tagName))return;
+ liveSig=sig;
+ if(!L.length){LC=null;box.innerHTML='<div class="empty">No students are in an exam right now. They appear here when they begin a secure exam.</div>';return}
+ const G={};L.forEach(s=>(G[clsOf(s)]=G[clsOf(s)]||[]).push(s));
+ if(LC&&!G[LC])LC=null;
+ if(!LC){
+  const names=Object.keys(G).sort((a,b)=>G[b].filter(s=>s.state==="help").length-G[a].filter(s=>s.state==="help").length||a.localeCompare(b,undefined,{numeric:true}));
+  const act=L.filter(s=>ACT.includes(s.state));
+  box.innerHTML=(act.length>1?`<details class="lv all" data-ok="ALL"${dr("ALL").o?" open":""}><summary><b>Message all students in exams (${act.length})</b></summary>${compose("ALL","all "+act.length+" students")}</details>`:"")+
+  `<p class="note">Click a class to see its students.</p><div class="grid">`+names.map(c=>{const g=G[c],a=g.filter(s=>ACT.includes(s.state)).length,h=g.filter(s=>s.state==="help").length,d=g.filter(s=>DONE.includes(s.state)).length;
+   return `<button class="card cc${h?" help":""}" data-lcls="${esc(c)}"><h3>${esc(c)}<span class="big">${g.length}</span></h3><p>${a} in exam${d?`, ${d} finished/ended`:""}</p><p style="margin-top:8px">${h?`<span class="tag bad">${h} help request${h>1?"s":""}</span>`:'<span class="tag ok">No alerts</span>'}</p></button>`}).join("")+`</div>`;return}
+ const g=G[LC],act=g.filter(s=>ACT.includes(s.state)),fin=g.filter(s=>DONE.includes(s.state)),selN=fin.filter(s=>LSEL.has(s.sid)).length;
+ box.innerHTML=`<div class="lvbar"><button class="btn sm alt" data-lback="1">← All classes</button><h3 style="font-size:1.6rem">${esc(LC)}</h3><span class="tag">${g.length} students</span><span class="tag">${act.length} in exam</span></div>
+ ${fin.length?`<div class="lvbar"><label class="chk" style="margin:0"><input type="checkbox" data-lselall="1"${selN&&selN===fin.length?" checked":""}>Select all finished/ended (${fin.length})</label><button class="btn sm danger" data-ldelsel="1"${selN?"":" disabled"}>Delete selected (${selN})</button></div>`:""}
+ ${act.length>1?`<details class="lv all" data-ok="CLASS"${dr("CLASS").o?" open":""}><summary><b>Message all in ${esc(LC)} (${act.length})</b></summary>${compose("CLASS","all "+act.length+" students in "+LC)}</details>`:""}
+ ${g.map(s=>stuCard(s,n)).join("")}`}
+
+async function delStudents(sids){
+ const L=await Live.list(),nm=sids.length===1?((L.find(s=>s.sid===sids[0])||{}).name||"this student"):sids.length+" students";
+ if(!await confirmBox(`<b>Warning:</b> you are about to delete <b>${esc(nm)}</b> from the live exam list. Their live record, activity log and messages will be erased. This cannot be undone. Results already submitted are not affected.`,sids.length>=3?"DELETE":""))return;
+ for(const sid of sids){await Live.remove(sid);LSEL.delete(sid)}
+ toast("Deleted.");liveSig="";refreshLive(await Live.list())}
+
+async function liveClick(e){
+ const t=e.target,redraw=async()=>{liveSig="";refreshLive(await Live.list())};
+ let b;
+ if(b=t.closest("[data-lcls]")){LC=b.dataset.lcls;return redraw()}
+ if(t.closest("[data-lback]")){LC=null;return redraw()}
+ if(b=t.closest("[data-ldel]"))return delStudents([b.dataset.ldel]);
+ if(t.closest("[data-ldelsel]"))return delStudents([...LSEL]);
+ if(b=t.closest("[data-lsel]")){b.checked?LSEL.add(b.dataset.lsel):LSEL.delete(b.dataset.lsel);return redraw()}
+ if(b=t.closest("[data-lselall]")){const L=await Live.list();L.filter(s=>DONE.includes(s.state)&&clsOf(s)===LC).forEach(s=>b.checked?LSEL.add(s.sid):LSEL.delete(s.sid));return redraw()}
+ if((b=t.closest("[data-send]"))&&b.dataset.send==="CLASS"){
+  e.stopPropagation();const m=msgOf("CLASS");if(!m.text){toast("Write your message first.");return}
+  const L=await Live.list(),T=L.filter(s=>ACT.includes(s.state)&&clsOf(s)===LC);if(!T.length){toast("No students in an exam in this class.");return}
+  for(const s of T)await Live.message(s.sid,m);
+  if(dr("CLASS").p==="custom")dr("CLASS").t="";
+  toast(`${LV[m.level]} sent to ${T.length} students in ${LC}.`);redraw()}}
+
+/* ---------- 2. ITEM ANALYSIS + ACADEMIC REPORT ---------- */
+const pc=(a,b)=>b?Math.round(a/b*100):0,stt=p=>p<50?["Re-teach","bad"]:p<70?["Revise","mid"]:["Secure","ok"];
+const cut=(s,n)=>{s=strip(s);return s.length>n?s.slice(0,n)+"…":s};
+async function analyse(list,btn){
+ const old=btn.textContent;btn.disabled=true;
+ try{
+  const ids=list.map(r=>r.id),all=[];
+  for(let i=0;i<ids.length;i+=40){btn.textContent="Loading "+Math.min(i+40,ids.length)+"/"+ids.length+"…";
+   const r=await rows("results","id=in."+enc("("+ids.slice(i,i+40).join(",")+")")+"&select=*");if(!r.ok)throw new Error("Could not load results. Log in again.");all.push(...(r.j||[]))}
+  const by={};all.forEach(r=>(by[r.aid]=by[r.aid]||[]).push(r));const reps=[];
+  for(const aid of Object.keys(by)){
+   const R=by[aid],key=await getKey(aid),D=R.filter(r=>Array.isArray(r.detail)&&r.detail.length);let Q=qList(key);
+   if(!Q.length&&D.length)Q=D[0].detail.map((d,i)=>({id:d.id,n:i+1,si:0,sec:"",marks:0,prompt:"Question "+(i+1)}));
+   const qs={};Q.forEach(q=>{if(!q.marks)q.marks=Math.max(1,...D.map(r=>{const d=r.detail.find(x=>x.id===q.id);return d?+d.e||0:0}));qs[q.id]={q,n:0,e:0,full:0,wr:{},cor:""}});
+   D.forEach(r=>r.detail.forEach(d=>{const o=qs[d.id];if(!o)return;o.n++;o.e+=+d.e||0;if(d.c&&!o.cor)o.cor=d.c;
+    if((+d.e||0)>=o.q.marks-1e-9)o.full++;else{const g=strip(d.g)||"No answer given";o.wr[g]=(o.wr[g]||0)+1}}));
+   const items=Object.values(qs).filter(o=>o.n).map(o=>{const w=Object.entries(o.wr).sort((a,b)=>b[1]-a[1])[0];return{...o,pct:pc(o.e,o.q.marks*o.n),fp:pc(o.full,o.n),top:w?w[0]:"",topN:w?w[1]:0}});
+   const S={};items.forEach(o=>{const k=o.q.si,s=S[k]=S[k]||{name:o.q.sec||"General",e:0,p:0,it:[]};s.e+=o.e;s.p+=o.q.marks*o.n;s.it.push(o)});
+   const secs=Object.values(S).map(s=>({...s,pct:pc(s.e,s.p)})).sort((a,b)=>a.pct-b.pct);
+   const dist={};R.forEach(r=>dist[r.grade]=(dist[r.grade]||0)+1);
+   reps.push({title:R[0].title,N:R.length,mean:Math.round(R.reduce((t,r)=>t+(+r.pct||0),0)/R.length),pass:R.filter(r=>r.pct>=50).length,dist,items,secs,low:R.filter(r=>r.pct<50).sort((a,b)=>a.pct-b.pct),noD:R.length-D.length,cls:[...new Set(R.map(r=>r.cls))].join(", ")})}
+  showReport(reps)}
+ catch(e){toast(e.message||"Could not build the analysis.")}
+ btn.disabled=false;btn.textContent=old}
+
+function repHtml(reps){
+ const bar=(p,c)=>`<div class="bar"><i class="${c}" style="width:${p}%"></i></div>`;
+ return reps.map(R=>{
+  const worst=R.items.slice().sort((a,b)=>a.pct-b.pct).slice(0,10),weak=R.secs.filter(s=>s.pct<70);
+  return `<h2>${sx(R.title)}</h2><p style="margin:0;color:var(--mut,#5b6580)">Classes: ${sx(R.cls)}</p>
+<div class="k"><div><b>${R.N}</b>Students</div><div><b>${R.mean}%</b>Class average</div><div><b>${pc(R.pass,R.N)}%</b>Pass rate (50%+)</div><div><b>${R.low.length}</b>Below 50%</div></div>
+<h3>Grade distribution</h3><table>${["A","B","C","D","F"].map(g=>`<tr><td style="width:40px"><b>${g}</b></td><td>${bar(pc(R.dist[g]||0,R.N),g==="F"?"bad":g==="D"||g==="C"?"mid":"ok")}</td><td style="width:90px">${R.dist[g]||0} (${pc(R.dist[g]||0,R.N)}%)</td></tr>`).join("")}</table>
+<h3>Concepts to revisit</h3>${R.secs.length?R.secs.map(s=>{const [lab,c]=stt(s.pct),f=s.it.filter(o=>o.pct<60).sort((a,b)=>a.pct-b.pct).slice(0,3);
+   return `<div class="rec ${c}"><b>${sx(s.name)}</b> <span class="chip ${c}">${lab}</span> class scored ${s.pct}% on this topic.${s.pct<50?" Re-teach it from the basics before the next assessment.":s.pct<70?" Revise with targeted practice and worked examples.":" Well understood. Keep it in regular retrieval practice."}${f.length?`<ul>${f.map(o=>`<li>Focus: ${sx(cut(o.q.prompt,120))} (${o.pct}% scored${o.top?`; most common answer: “${sx(cut(o.top,50))}”`:""})</li>`).join("")}</ul>`:""}</div>`}).join(""):'<p>No question details available for this exam.</p>'}
+${weak.length?`<p><b>Priority order for re-teaching:</b> ${weak.map(s=>sx(s.name)+" ("+s.pct+"%)").join(", ")}.</p>`:""}
+<h3>Most missed questions</h3><div style="overflow-x:auto"><table><tr><th>Q</th><th>Question</th><th>Avg mark</th><th>Fully correct</th><th>Common wrong answer</th><th>Correct answer</th></tr>${worst.map(o=>{const [lab,c]=stt(o.pct);return `<tr><td>${o.q.n}</td><td>${sx(cut(o.q.prompt,140))}</td><td>${bar(o.pct,c)}${o.pct}%</td><td>${o.fp}%</td><td>${sx(cut(o.top,60))}${o.topN?` (${o.topN})`:""}</td><td>${sx(cut(o.cor,60))}</td></tr>`}).join("")}</table></div>
+<h3>Full item analysis</h3><div style="overflow-x:auto"><table><tr><th>Q</th><th>Topic</th><th>Marks</th><th>Avg mark</th><th>Status</th></tr>${R.items.map(o=>{const [lab,c]=stt(o.pct);return `<tr><td>${o.q.n}</td><td>${sx(o.q.sec)}</td><td>${o.q.marks}</td><td>${bar(o.pct,c)}${o.pct}%</td><td><span class="chip ${c}">${lab}</span></td></tr>`}).join("")}</table></div>
+<h3>Students who need support (below 50%)</h3>${R.low.length?`<p>${R.low.map(r=>sx(r.name)+" ("+sx(r.cls)+", "+r.pct+"%)").join("; ")}.</p>`:"<p>None. Every student passed.</p>"}${R.noD?`<p class="note">${R.noD} result(s) have no question details and are not in the question analysis.</p>`:""}`}).join("")}
+function reportCsv(reps){const c=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"';
+ return "\ufeffExam,Q,Topic,Question,Marks,Attempts,Fully correct %,Average mark %,Common wrong answer,Times chosen,Correct answer\n"+reps.flatMap(R=>R.items.map(o=>[R.title,o.q.n,o.q.sec,strip(o.q.prompt),o.q.marks,o.n,o.fp,o.pct,o.top,o.topN,o.cor].map(c).join(","))).join("\n")}
+function showReport(reps){
+ const body=repHtml(reps),o=mgModal(`<div class="row" style="margin:0 0 8px"><button class="btn sm" id="rpd">Download report (HTML)</button><button class="btn sm alt" id="rpc">Download analysis (CSV)</button><button class="btn sm alt" id="rpx">Close</button></div><div class="rp">${body}</div>`);
+ o.firstChild.style.maxWidth="1000px";o.style.alignItems="flex-start";
+ o.querySelector("#rpx").onclick=()=>o.remove();
+ o.querySelector("#rpc").onclick=()=>saveData("question_analysis.csv",new Blob([reportCsv(reps)],{type:"text/csv;charset=utf-8"}));
+ o.querySelector("#rpd").onclick=()=>{const css=document.getElementById("up-css").textContent.split("/* reports */")[1];
+  const h=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Academic report</title><style>body{margin:0;padding:24px;background:#fff;font-family:system-ui,sans-serif}.hd{border-bottom:4px solid #b8923a;padding-bottom:8px;margin-bottom:6px;color:#0b1a3a}${css}</style></head><body><div class="rp"><div class="hd"><b style="font-size:1.3rem">Al Muntazir Islamic International School</b><br>Academic report · ${new Date().toLocaleDateString("en-GB")}</div>${body}</div></body></html>`;
+  saveData("academic_report.html",new Blob([h],{type:"text/html;charset=utf-8"}))}}
+
+const _md=mgDraw;
+mgDraw=function(){_md.apply(this,arguments);
+ if(MG.tab!=="results")return;const c=$("#mgcsv");if(!c||$("#mgan"))return;
+ const b=document.createElement("button");b.className="btn sm";b.id="mgan";b.textContent="Analysis & report";c.after(b);
+ b.onclick=()=>{const S=MG.sel.results,f=filt("results"),list=S.size?f.filter(r=>S.has(r.id)):f;if(!list.length)return toast("No results to analyse.");analyse(list,b)}};
+
+/* ---------- 3. SELECT + BULK DELETE + EDIT FOR ASSESSMENTS AND LINKS ---------- */
+function bar(host,before,count,label,onDel,boxes){
+ const d=document.createElement("div");d.className="lvbar";
+ d.innerHTML=`<label class="chk" style="margin:0"><input type="checkbox" class="upall">Select all</label><button class="btn sm danger" disabled>${label} (0)</button>`;
+ before.parentNode.insertBefore(d,before);
+ const bt=d.querySelector("button"),al=d.querySelector(".upall"),sel=()=>boxes().filter(x=>x.checked);
+ const upd=()=>{const n=sel().length;bt.disabled=!n;bt.textContent=label+" ("+n+")";al.checked=n&&n===boxes().length};
+ al.onchange=()=>{boxes().forEach(x=>x.checked=al.checked);upd()};
+ host.addEventListener("change",e=>{if(e.target.matches("[data-up]"))upd()});
+ bt.onclick=async()=>{const s=sel();if(!s.length)return;
+  if(!await confirmBox(`<b>Warning:</b> delete <b>${s.length}</b> item(s) permanently? This cannot be undone.`,s.length>=5?"DELETE":""))return;onDel(s.map(x=>x.dataset.up))}}
+function enhanceLists(){
+ const ap=document.querySelector('[data-t="assessments"]'),tb=ap&&ap.querySelector("table");
+ if(tb&&!tb.dataset.up){tb.dataset.up=1;
+  [...tb.rows].forEach((r,i)=>{const c=r.insertCell(0),id=r.querySelector("[data-d]");if(i===0){c.outerHTML="<th></th>";return}if(id)c.innerHTML=`<input type="checkbox" data-up="${esc(id.dataset.d)}" aria-label="Select">`});
+  bar(ap,tb.parentNode,0,"Delete selected",ids=>{db.a=db.a.filter(a=>!ids.includes(a.id));persist(ids.length+" assessment(s) deleted.")},()=>[...ap.querySelectorAll("[data-up]")])}
+ const rm=document.querySelectorAll("[data-l]");
+ if(rm.length&&!rm[0].dataset.up){
+  const host=rm[0].closest(".panel");
+  rm.forEach(b=>{b.dataset.up=1;const p=b.parentNode,i=b.dataset.l;p.insertAdjacentHTML("afterbegin",`<input type="checkbox" data-up="${i}" aria-label="Select"> `);
+   const e=document.createElement("button");e.className="btn sm alt";e.textContent="Edit";e.style.marginRight="6px";b.before(e);
+   e.onclick=()=>{const l=db.links[+i],o=mgModal(`<h2>Edit link</h2><label for="lk1">Title</label><input id="lk1" value="${sx(l.title)}"><label for="lk2">Link</label><input id="lk2" type="url" value="${sx(l.url)}"><div class="row"><button class="btn" id="lks">Save</button><button class="btn alt" id="lkc">Cancel</button></div>`);
+    o.querySelector("#lkc").onclick=()=>o.remove();
+    o.querySelector("#lks").onclick=()=>{const t=o.querySelector("#lk1").value.trim(),u=o.querySelector("#lk2").value.trim();if(!t||!u)return;db.links[+i]={title:t,url:u};o.remove();persist("Link updated.")}}});
+  bar(host,rm[0].parentNode,0,"Remove selected",ids=>{db.links=db.links.filter((_,i)=>!ids.includes(String(i)));persist(ids.length+" link(s) removed.")},()=>[...host.querySelectorAll("[data-up]")])}}
+const _bd=bindDash;
+bindDash=function(){_bd.apply(this,arguments);enhanceLists()};
+})();
+</script>
 
 </body></html>
