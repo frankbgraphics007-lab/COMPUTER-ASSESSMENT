@@ -318,7 +318,7 @@ const Live=REMOTE?LiveRemote:LiveLocal;
 window.__submitExam=async function(p){
  if(!REMOTE)return{ok:false,fatal:true,msg:"The online server is not connected."};
  if(isStaff())return{ok:false,fatal:true,msg:"Preview only. Results are not saved for staff."};
- try{const r=await fetch(SB+"/functions/v1/submit-exam",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json"},body:JSON.stringify(p)});
+ try{const r=await fetch(SB+"/functions/v1/quick-endpoint",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+SUPABASE_ANON_KEY,"Content-Type":"application/json"},body:JSON.stringify(p)});
   let j=null;try{j=await r.json()}catch(e){}
   if(r.ok&&j&&j.ok)return j;
   if(r.status>=400&&r.status<500&&r.status!==429)return{ok:false,fatal:true,msg:(j&&j.msg)||"Could not submit. Tell your teacher."};
@@ -1046,7 +1046,7 @@ async function mgDiag(){const box=$("#mgbody");
  $("#dg").onclick=async()=>{const out=$("#dgo");out.innerHTML='<p class="note">Testing…</p>';const L=[];const add=(ok,n,d)=>L.push(`<tr><td>${ok?"✅":"❌"}</td><td><b>${sx(n)}</b>${d?`<br><span class="note">${sx(d)}</span>`:""}</td></tr>`);
   const p=await rpc("get_portal");add(p.ok,"Portal data loads from Supabase",p.ok?"":"Status "+p.status);
   const rr=await rows("results","select=id&limit=1");add(rr.ok,"Staff login can read results",rr.ok?"":"Status "+rr.status+". Log out and in again.");
-  let fr=null;try{fr=await fetch(SB+"/functions/v1/submit-exam",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+(ss_get("ca_tok")||SUPABASE_ANON_KEY),"Content-Type":"application/json"},body:JSON.stringify({action:"diag"})})}catch(e){}
+  let fr=null;try{fr=await fetch(SB+"/functions/v1/quick-endpoint",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+(ss_get("ca_tok")||SUPABASE_ANON_KEY),"Content-Type":"application/json"},body:JSON.stringify({action:"diag"})})}catch(e){}
   if(!fr)add(false,"Marking function submit-exam is reachable","No answer from the server. Check that the function is deployed with exactly this name.");
   else if(fr.status===404)add(false,"Marking function submit-exam is deployed","Not found. Edge Functions → Deploy a new function → name it exactly: submit-exam");
   else if(fr.status===401)add(false,"Marking function accepts requests","Rejected (401). Open the function in Supabase and turn OFF 'Verify JWT', then deploy again.");
