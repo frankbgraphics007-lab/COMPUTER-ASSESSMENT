@@ -1024,7 +1024,7 @@ function mgDraw(){const t=MG.tab,T=TB[t],all=MG.data[t],f=filt(t),can=T.admin?is
 function mgForm(t,row){if(t==="results"&&row)return mgResEdit(row);const add=!row;
  const F={results:[["name","Student name","text"],["cls","Class","text"],["total","Marks scored","number"]],
   students:[["name","Full name","text"],["cls","Class (e.g. 9G AL QAMAR)","text"],["year","Year","number"],["adm","Adm. no (optional)","text"],["sex","Sex","sel"],["active","Can sit exams","bool"]],
-  teachers:[["name","Name","text"],["email","Email (same as Supabase login)","email"],["reg","Reg no (optional)","text"]]}[t];
+  teachers:[["name","Name","text"],["email","Email (used to log in)","email"],["reg","Reg no (optional)","text"],["password",add?"Temporary password (at least 8 characters)":"Reset password (leave empty to keep the current one)","password"]]}[t];
  const R=row||{active:true,sex:"M",year:7};
  const inp=([k,l,ty])=>`<label for="mf_${k}">${l}</label>`+(ty==="sel"?`<select id="mf_${k}"><option value="M"${R[k]==="M"?" selected":""}>M</option><option value="F"${R[k]==="F"?" selected":""}>F</option></select>`
   :ty==="bool"?`<select id="mf_${k}"><option value="1"${R[k]?" selected":""}>Yes</option><option value="0"${R[k]?"":" selected"}>No</option></select>`
@@ -1038,8 +1038,17 @@ function mgForm(t,row){if(t==="results"&&row)return mgResEdit(row);const add=!ro
    const b={name,cls,year:yr,adm:v("adm")||null,sex:v("sex"),active:v("active")==="1"};
    r=add?await sb("/rest/v1/roster",{method:"POST",body:JSON.stringify(b),headers:{Prefer:"return=minimal"}}):await sb("/rest/v1/roster?id=eq."+row.id,{method:"PATCH",body:JSON.stringify(b),headers:{Prefer:"return=minimal"}})}
   else if(t==="teachers"){const name=v("name"),email=v("email").toLowerCase();if(!name||!/^\S+@\S+\.\S+$/.test(email))return bad("Enter a name and a valid email.");
+   const pw=o.querySelector("#mf_password").value;
+   if(add&&pw.length<8)return bad("Give the teacher a temporary password of at least 8 characters.");
+   if(!add&&pw&&pw.length<8)return bad("Password must be at least 8 characters.");
    const b={name,reg:v("reg")};
-   r=add?await sb("/rest/v1/staff_users",{method:"POST",body:JSON.stringify({...b,email,role:"teacher"}),headers:{Prefer:"return=minimal"}}):await sb("/rest/v1/staff_users?email=eq."+enc(row.email),{method:"PATCH",body:JSON.stringify(b),headers:{Prefer:"return=minimal"}})}
+   if(add){const f=await staffFn({action:"create",email,name,reg:b.reg,password:pw});
+    if(f.ok)r={ok:true};
+    else if(f.status===404||f.status===0){r=await sb("/rest/v1/staff_users",{method:"POST",body:JSON.stringify({...b,email,role:"teacher"}),headers:{Prefer:"return=minimal"}});
+     if(r.ok)toast("Listed, but the staff-admin function is not deployed: create the login in Supabase > Authentication > Users.")}
+    else return bad(f.j&&f.j.error||"Could not create the teacher.")}
+   else{r=await sb("/rest/v1/staff_users?email=eq."+enc(row.email),{method:"PATCH",body:JSON.stringify(b),headers:{Prefer:"return=minimal"}});
+    if(r.ok&&pw){const f=await staffFn({action:"reset",email:row.email,password:pw});if(!f.ok)return bad(f.status===404||f.status===0?"Saved, but the staff-admin function is not deployed, so the password was not changed.":(f.j&&f.j.error)||"Could not change the password.")}}}
   else{const mx=+row.max_marks||0,tot=Math.min(Math.max(+v("total"),0),mx);if(!isFinite(tot)||v("total")==="")return bad("Enter the marks.");const pct=mx?Math.round(tot/mx*100):0;
    r=await sb("/rest/v1/results?id=eq."+row.id,{method:"PATCH",body:JSON.stringify({name:v("name"),cls:v("cls"),total:tot,pct,grade:GRADE(pct)}),headers:{Prefer:"return=minimal"}})}
   if(!r.ok)return bad(r.status===409?"That one already exists.":r.status===403?"Not allowed. Only the main admin can change students and teachers.":"Could not save. Try again.");
@@ -1161,6 +1170,77 @@ async function mgResEdit(row){
   if(!r.ok&&r.status===400)r=await sb(url,{method:"PATCH",body:JSON.stringify(body),headers:hd}); // columns edited_at/edited_by not created yet
   if(!r.ok)return bad(r.status===403?"Not allowed.":"Could not save. Try again.");
   o.remove();toast("Saved.");MG.sel.results.clear();MG.data.results=null;mgShow()}}
+
+
+/* ===== Student shield: whole site except the staff dashboard (added) ===== */
+const staffFn=async body=>{
+ const go=()=>fetch(SB+"/functions/v1/staff-admin",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+(ss_get("ca_tok")||""),"Content-Type":"application/json"},body:JSON.stringify(body)});
+ try{let r=await go();if(r.status===401&&await sbRefresh())r=await go();let j=null;try{j=await r.json()}catch(e){}return{ok:r.ok,status:r.status,j}}catch(e){return{ok:false,status:0,j:null}}};
+
+/* Change my own password (all staff) */
+const USERS_BASE=USERS;
+USERS=function(){return USERS_BASE()+`<div class="panel"><h2>Change my password</h2><label for="pw_cur">Current password</label><input id="pw_cur" type="password" autocomplete="current-password"><label for="pw_new">New password (at least 8 characters)</label><input id="pw_new" type="password" autocomplete="new-password"><label for="pw_new2">Repeat new password</label><input id="pw_new2" type="password" autocomplete="new-password"><div class="row"><button class="btn sm" id="pw_go">Change password</button></div><p class="note">You will stay logged in on this device. Use a password you do not use anywhere else.</p></div>`};
+function bindPw(){const b=$("#pw_go");if(!b)return;
+ b.onclick=async()=>{const cur=$("#pw_cur").value,n1=$("#pw_new").value,n2=$("#pw_new2").value,em=staffEmail();
+  if(!em||!cur)return toast("Enter your current password.");
+  if(n1.length<8)return toast("New password must be at least 8 characters.");
+  if(n1!==n2)return toast("The two new passwords do not match.");
+  if(n1===cur)return toast("Choose a password different from the current one.");
+  b.disabled=true;
+  try{const v=await fetch(SB+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:SUPABASE_ANON_KEY,"Content-Type":"application/json"},body:JSON.stringify({email:em,password:cur})});
+   const vj=await v.json();if(!v.ok||!vj.access_token){toast("Current password is wrong.");b.disabled=false;return}
+   const u=await fetch(SB+"/auth/v1/user",{method:"PUT",headers:{apikey:SUPABASE_ANON_KEY,Authorization:"Bearer "+vj.access_token,"Content-Type":"application/json"},body:JSON.stringify({password:n1})});
+   if(u.ok){ss_set("ca_tok",vj.access_token);ss_set("ca_rt",vj.refresh_token);["#pw_cur","#pw_new","#pw_new2"].forEach(s=>$(s).value="");toast("Password changed.")}
+   else toast("Could not change it. The new password may be too weak.")}
+  catch(e){toast("No connection. Try again.")}
+  b.disabled=false}}
+{const _bd3=bindDash;bindDash=function(){_bd3.apply(this,arguments);bindPw()}}
+
+/* Shield: applies to everyone who is NOT logged in as staff */
+(function(){
+ const on=()=>!isStaff();
+ const CSS="body.shield,body.shield *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}body.shield input,body.shield textarea,body.shield [contenteditable=true]{-webkit-user-select:text;user-select:text}"+
+  "@media print{body.shield>*{display:none!important}body.shield::before{content:'Printing is disabled.';display:block;font:20px sans-serif;padding:40px}}"+
+  "#shcv{position:fixed;inset:0;background:#fff;color:#1a3a6b;z-index:2147483647;display:none;align-items:center;justify-content:center;font:600 18px/1.4 system-ui,sans-serif;text-align:center;padding:24px}"+
+  "#shwm{position:fixed;inset:0;pointer-events:none;z-index:2147483000;opacity:.07;display:none;background-repeat:repeat}";
+ const st=document.createElement("style");st.textContent=CSS;document.head.appendChild(st);
+ const cv=document.createElement("div");cv.id="shcv";cv.textContent="Screen hidden. Return to the exam window to continue.";document.body.appendChild(cv);
+ const wm=document.createElement("div");wm.id="shwm";document.body.appendChild(wm);
+ const examLive=()=>typeof EX!=="undefined"&&EX&&!EX.released;
+ const log=(k,m)=>{try{if(examLive())note(k,m)}catch(e){}};
+ const editableT=t=>t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable);
+ const stop=e=>{e.preventDefault();e.stopPropagation()};
+ const wipeClip=()=>{try{navigator.clipboard&&navigator.clipboard.writeText&&navigator.clipboard.writeText(" ").catch(()=>{})}catch(e){}};
+ function attach(doc){if(!doc||doc.__sh)return;doc.__sh=1;
+  try{
+   const s=doc.createElement("style");s.textContent="html,body,body *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}input,textarea,[contenteditable=true]{-webkit-user-select:text;user-select:text}@media print{body{display:none!important}}";(doc.head||doc.documentElement).appendChild(s);
+   ["contextmenu","copy","cut","dragstart"].forEach(t=>doc.addEventListener(t,e=>{if(on()){stop(e);if(t==="copy"||t==="cut")wipeClip()}},true));
+   doc.addEventListener("selectstart",e=>{if(on()&&!editableT(e.target))e.preventDefault()},true);
+   doc.addEventListener("beforeprint",()=>{if(on()){cv.style.display="flex";log("print","Tried to print")}});
+   doc.addEventListener("afterprint",()=>{cv.style.display="none"});
+   const kd=e=>{if(!on())return;const k=(e.key||"").toLowerCase(),m=e.ctrlKey||e.metaKey,ed=editableT(e.target);
+    if(k==="printscreen"||k==="snapshot"){wipeClip();log("screenshot","Pressed Print Screen");if(e.type==="keydown")stop(e);return}
+    if(e.metaKey&&e.shiftKey&&["3","4","5","s"].includes(k)){stop(e);wipeClip();log("screenshot","Tried to take a screenshot");return}
+    if(m&&["p","s","u"].includes(k)){stop(e);log("keys","Blocked key: "+e.key);return}
+    if(m&&["c","x","a"].includes(k)&&!ed){stop(e);return}
+    if(k==="f12"||(m&&e.shiftKey&&["i","j","c","k"].includes(k))){stop(e);log("keys","Blocked developer tools key")}};
+   doc.addEventListener("keydown",kd,true);doc.addEventListener("keyup",kd,true);
+  }catch(e){}}
+ attach(document);
+ /* also protect the exam iframe */
+ const _g=guard;guard=function(d){_g.apply(this,arguments);attach(d)};
+ /* hide the page whenever the window loses focus (snipping tools, other windows) */
+ let hid=false;
+ window.addEventListener("blur",()=>setTimeout(()=>{if(!on()||document.hasFocus())return;hid=true;cv.style.display="flex";log("blur","Window lost focus")},60));   // hasFocus() stays true when the click is inside the exam frame
+ window.addEventListener("focus",()=>{if(hid){hid=false;cv.style.display="none"}});
+ /* faint watermark with the student's name during an exam, so photos/leaks can be traced */
+ const mkWm=()=>{if(!on()||!examLive()){wm.style.display="none";return}
+  const t=(EX.name||"")+"  "+new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  const svg="<svg xmlns='http://www.w3.org/2000/svg' width='320' height='200'><text x='20' y='110' font-family='Arial' font-size='22' font-weight='700' fill='#000' transform='rotate(-25 160 100)'>"+String(t).replace(/[<>&'\"]/g,"")+"</text></svg>";
+  wm.style.backgroundImage="url(\"data:image/svg+xml;utf8,"+encodeURIComponent(svg)+"\")";wm.style.display="block"};
+ setInterval(()=>{document.body.classList.toggle("shield",on());if(hid&&document.hasFocus()){hid=false;cv.style.display="none"}mkWm()},1000);
+ document.body.classList.toggle("shield",on());
+})();
 
 </script>
 
