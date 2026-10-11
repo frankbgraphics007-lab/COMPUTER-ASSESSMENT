@@ -1338,6 +1338,8 @@ input,select,textarea{border-radius:8px;transition:border-color .25s,box-shadow 
 const nz=s=>String(s||"").toUpperCase().replace(/\s+/g," ").trim();
 const ACT=["active","help","paused"],DONE=["done","ended"];
 let RM=null,RML=false,LY=null,LG=null,LC=null;const LSEL=new Set();
+let HID={};try{HID=JSON.parse(localStorage.getItem("up_hid")||"{}");const t=Date.now();Object.keys(HID).forEach(k=>{if(t-HID[k]>864e5)delete HID[k]})}catch(e){HID={}}
+const saveHid=()=>{try{localStorage.setItem("up_hid",JSON.stringify(HID))}catch(e){}};
 const nat=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
 const gOf=(sex,cls)=>{const s=String(sex||"").toUpperCase();if(s==="M")return"Boys";if(s==="F")return"Girls";const m=String(cls||"").toUpperCase().match(/^\d+\s*([BG])/);return m?(m[1]==="B"?"Boys":"Girls"):"Unknown"};
 const mainName=(y,g)=>"Year "+y+" "+g;
@@ -1356,7 +1358,7 @@ function stuCard(s,n){
  else if(s.state==="paused")btn=`<button class="btn sm" data-lc="resume" data-sid="${sid}">Resume exam</button><button class="btn sm danger" data-lc="end" data-sid="${sid}">End exam</button>`;
  else btn=`<button class="btn sm danger" data-ldel="${sid}">Delete student</button>`;
  const acked=(s.ackN||0)>=(s.msgN||0),ms=s.msgs||[];
- return `<div class="lv ${esc(s.state)}"><div class="lv-h">${fin?`<input type="checkbox" data-lsel="${sid}" aria-label="Select"${LSEL.has(s.sid)?" checked":""}>`:""}<strong>${esc(s.name)}</strong><span class="tag">${esc(clsOf(s))}</span><span>${esc(s.title)}</span><span class="tag ${s.state==="help"?"bad":fin?"ok":""}">${STL[s.state]||esc(s.state)}</span>${off?'<span class="tag bad">No signal</span>':""}${v.length?`<span class="tag bad">${v.length} warning${v.length>1?"s":""}</span>`:""}${s.warns?`<span class="tag bad">${s.warns} formal warning${s.warns>1?"s":""} issued</span>`:""}</div>
+ return `<div class="lv ${esc(s.state)}"><div class="lv-h"><input type="checkbox" data-lsel="${sid}" aria-label="Select"${LSEL.has(s.sid)?" checked":""}><strong>${esc(s.name)}</strong><span class="tag">${esc(clsOf(s))}</span><span>${esc(s.title)}</span><span class="tag ${s.state==="help"?"bad":fin?"ok":""}">${STL[s.state]||esc(s.state)}</span>${off?'<span class="tag bad">No signal</span>':""}${v.length?`<span class="tag bad">${v.length} warning${v.length>1?"s":""}</span>`:""}${s.warns?`<span class="tag bad">${s.warns} formal warning${s.warns>1?"s":""} issued</span>`:""}</div>
 ${s.state==="help"&&s.help?`<p class="lv-r"><b>${esc(s.help.reason)}</b>${s.help.note?" “"+esc(s.help.note)+"”":""}</p>`:""}
 ${v.length?`<details><summary>Activity log</summary><ul>${v.slice(-8).reverse().map(x=>`<li>${new Date(x.t).toLocaleTimeString("en-GB")} · ${esc(x.msg)}</li>`).join("")}</ul></details>`:""}
 ${ms.length?`<details><summary>Messages sent (${s.msgN}) · last one ${acked?"acknowledged":"waiting for the student"}</summary><ul>${ms.slice().reverse().map(x=>`<li>${new Date(x.t).toLocaleTimeString("en-GB")} · ${LV[x.level]||""}: ${esc(x.text)}</li>`).join("")}</ul></details>`:""}
@@ -1367,6 +1369,7 @@ refreshLive=function(L){
  const box=$("#live");if(!box)return;loadRM();
  if(!box.__up){box.__up=1;box.addEventListener("click",liveClick,true)}
  const n=Date.now();
+ L=L.filter(s=>{if(!HID[s.sid])return true;if(s.state==="help"){delete HID[s.sid];saveHid();return true}return false});
  L=L.slice().sort((a,b)=>(b.state==="help")-(a.state==="help")||String(a.name).localeCompare(b.name));
  const nh=L.filter(s=>s.state==="help").length,bd=$("#lvbadge");
  if(bd){bd.hidden=!nh;bd.textContent=nh}
@@ -1397,21 +1400,31 @@ refreshLive=function(L){
  const msg=act.length>1?(!LY?`<details class="lv all" data-ok="ALL"${dr("ALL").o?" open":""}><summary><b>Message all students in exams (${act.length})</b></summary>${compose("ALL","all "+act.length+" students")}</details>`
   :`<details class="lv all" data-ok="CLASS"${dr("CLASS").o?" open":""}><summary><b>Message all in ${esc(scopeLab())} (${act.length})</b></summary>${compose("CLASS","all "+act.length+" students in "+scopeLab())}</details>`):"";
  let list="";
- if(stu){const fin=stu.filter(s=>DONE.includes(s.state)),selN=fin.filter(s=>LSEL.has(s.sid)).length;
+ if(stu){const fin=stu,selN=fin.filter(s=>LSEL.has(s.sid)).length;
   list=`<p class="note">${stu.length} student${stu.length===1?"":"s"}${LY===10?" (all Year 10 "+esc(LG)+", streams not separated)":""}.</p>`+
-  (fin.length?`<div class="lvbar"><label class="chk" style="margin:0"><input type="checkbox" data-lselall="1"${selN&&selN===fin.length?" checked":""}>Select all finished/ended (${fin.length})</label><button class="btn sm danger" data-ldelsel="1"${selN?"":" disabled"}>Delete selected (${selN})</button></div>`:"")+
+  (fin.length?`<div class="lvbar"><label class="chk" style="margin:0"><input type="checkbox" data-lselall="1"${selN&&selN===fin.length?" checked":""}>Select all (${fin.length})</label><button class="btn sm danger" data-ldelsel="1"${selN?"":" disabled"}>Delete selected (${selN})</button></div>`:"")+
   stu.map(s=>stuCard(s,n)).join("")}
  box.innerHTML=head+msg+body+list}
 
 async function delStudents(sids){
- const L=await Live.list(),nm=sids.length===1?((L.find(s=>s.sid===sids[0])||{}).name||"this student"):sids.length+" students";
- if(!await confirmBox(`<b>Warning:</b> you are about to delete <b>${esc(nm)}</b> from the live exam list. Their live record, activity log and messages will be erased. This cannot be undone. Results already submitted are not affected.`,sids.length>=3?"DELETE":""))return;
- for(const sid of sids){await Live.remove(sid);LSEL.delete(sid)}
- toast("Deleted.");liveSig="";refreshLive(await Live.list())}
-
+ const L=await Live.list(),S=L.filter(s=>sids.includes(s.sid)),act=S.filter(s=>ACT.includes(s.state)).length,nm=sids.length===1?((S[0]||{}).name||"this student"):sids.length+" students";
+ const w=`<b>Warning:</b> delete <b>${esc(nm)}</b> from the live list? Their live record, activity log and messages will be erased. This cannot be undone. Results already submitted are not affected.`+(act?`<br><br><b>${act}</b> of them are still in the exam. Deleting does <b>not</b> stop them or send them back: their exams continue and they can still submit. They are only removed from this list.`:"");
+ if(!await confirmBox(w,sids.length>=3?"DELETE":""))return;
+ for(const sid of sids){await Live.remove(sid);HID[sid]=Date.now();LSEL.delete(sid)}
+ saveHid();toast("Deleted.");liveSig="";refreshLive(await Live.list())}
+function endDialog(sid){
+ const o=mgModal(`<h2>End this exam?</h2><p>The student's exam stops and they are taken out of the exam screen.</p><div class="row"><button class="btn danger" id="ed1">End exam</button><button class="btn danger" id="ed2">End exam and delete student</button><button class="btn alt" id="ed0">Cancel</button></div><p class="note">"End exam and delete" removes the student from this list once their device confirms the exam has ended. Submitted results are not affected.</p>`);
+ const redraw=async()=>{liveSig="";refreshLive(await Live.list())};
+ o.querySelector("#ed0").onclick=()=>o.remove();
+ o.querySelector("#ed1").onclick=async()=>{o.remove();await Live.command(sid,"end");redraw()};
+ o.querySelector("#ed2").onclick=async()=>{o.remove();toast("Ending the exam…");await Live.command(sid,"end");let ok=false;
+  for(let i=0;i<8&&!ok;i++){await new Promise(r=>setTimeout(r,2000));const s=(await Live.list()).find(x=>x.sid===sid);ok=!s||DONE.includes(s.state)}
+  await Live.remove(sid);HID[sid]=Date.now();saveHid();LSEL.delete(sid);
+  toast(ok?"Exam ended and student deleted.":"Student deleted. Their device had not confirmed the end yet.");redraw()}}
 async function liveClick(e){
  const t=e.target,redraw=async()=>{liveSig="";refreshLive(await Live.list())};
  let b;
+ if(b=t.closest('[data-lc="end"]')){e.stopPropagation();return endDialog(b.dataset.sid)}
  if(b=t.closest("[data-ny]")){LY=+b.dataset.ny;LG=LC=null;return redraw()}
  if(b=t.closest("[data-ng]")){LG=b.dataset.ng;LC=null;return redraw()}
  if(b=t.closest("[data-nc]")){LC=b.dataset.nc;return redraw()}
@@ -1419,7 +1432,7 @@ async function liveClick(e){
  if(b=t.closest("[data-ldel]"))return delStudents([b.dataset.ldel]);
  if(t.closest("[data-ldelsel]"))return delStudents([...LSEL]);
  if(b=t.closest("[data-lsel]")){b.checked?LSEL.add(b.dataset.lsel):LSEL.delete(b.dataset.lsel);return redraw()}
- if(b=t.closest("[data-lselall]")){const L=await Live.list();L.filter(s=>DONE.includes(s.state)&&inScope(s)).forEach(s=>b.checked?LSEL.add(s.sid):LSEL.delete(s.sid));return redraw()}
+ if(b=t.closest("[data-lselall]")){const L=await Live.list();L.filter(s=>inScope(s)).forEach(s=>b.checked?LSEL.add(s.sid):LSEL.delete(s.sid));return redraw()}
  if((b=t.closest("[data-send]"))&&b.dataset.send==="CLASS"){
   e.stopPropagation();const m=msgOf("CLASS");if(!m.text){toast("Write your message first.");return}
   const L=await Live.list(),T=L.filter(s=>ACT.includes(s.state)&&inScope(s));if(!T.length){toast("No students in an exam here.");return}
