@@ -131,6 +131,18 @@ summary{cursor:pointer;font-weight:600}
 .nt-m{margin:14px 0 0;font-size:1.12rem;line-height:1.5}
 .nt-w{margin:14px 0 0;font-weight:600;color:var(--bad)}
 .nt-f{margin:14px 0 0;font-size:.85rem;color:var(--mut)}
+.dh{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pill{display:inline-block;padding:3px 12px;border-radius:20px;background:var(--navy);color:var(--goldl);font-size:.8rem;font-weight:600;border:1px solid var(--gold)}
+.dtabs{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 6px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:8px;position:sticky;top:calc(64px + env(safe-area-inset-top,0px));z-index:5}
+.dt{appearance:none;border:0;background:transparent;color:var(--ink);padding:9px 16px;border-radius:6px;font-weight:600;font-size:.92rem;cursor:pointer;display:inline-flex;align-items:center;gap:4px;text-decoration:none;transition:background .2s,color .2s}
+.dt:hover{background:rgba(184,146,58,.14)}.dt.on{background:var(--navy);color:var(--goldl)}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-top:14px}
+.tile{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:6px;padding:12px 16px;display:flex;flex-direction:column}
+.tile b{font:700 1.8rem/1.1 var(--serif)}.tile span{color:var(--mut);font-size:.82rem}
+th{font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}tr:hover td{background:rgba(184,146,58,.07)}
+.panel h2{font-size:1.45rem;padding-bottom:8px;border-bottom:2px solid var(--line);margin-bottom:12px}
+input:focus,select:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(184,146,58,.2);outline:none}
+@media(max-width:640px){.dtabs{overflow-x:auto;flex-wrap:nowrap}.dt{white-space:nowrap}}
 @media(prefers-reduced-motion:reduce){*,*::before{transition:none!important;animation:none!important}}
 </style>
 
@@ -574,10 +586,11 @@ function staffLogin(){return crumb([["Home","#/"],["Staff"]])+`<div class="panel
 function bindLogin(){const go=async()=>{try{ac=ac||new(window.AudioContext||window.webkitAudioContext)()}catch(e){}if(await API.login($("#su").value.trim(),$("#sp").value)){sessionStorage.setItem("ca_staff","1");route()}else $("#se").innerHTML='<div class="msg bad">Username or password is incorrect.</div>'};$("#sb").onclick=go;$("#sp").addEventListener("keydown",e=>{if(e.key==="Enter")go()})}
 const yearOpts=sel=>SUBJECTS.map(s=>`<optgroup label="${s.n}">${s.years.map(y=>`<option value="${y}"${sel==y?" selected":""}>Year ${y}</option>`).join("")}</optgroup>`).join("");
 function staffDash(){const e=db.a.find(a=>a.id===editId)||{};
- return crumb([["Home","#/"],["Staff dashboard"]])+`<div class="ph"><h1>STAFF DASHBOARD</h1><div class="rule"></div></div>${flash?`<div class="msg">${flash}</div>`:""}
-<div class="panel"><h2>Live exams and help requests <span class="badge" id="lvbadge" hidden></span></h2><div id="live"></div><p class="note">${REMOTE?"Updates from student devices arrive every ~20 seconds. The list shows the students who need attention first.":"Demo: updates reach teachers in this browser only. Connect Supabase to reach other devices."}</p></div>
-<div class="panel"><h2>Exam maker</h2><p class="note" style="margin-top:6px">Build an online exam from a Word document of questions and publish it to a class. Only staff can see this.</p><div class="row"><a class="btn" href="#/maker">Open Exam Maker</a></div></div>
-<div class="panel"><h2>${editId?"Edit assessment":"Upload assessment"}</h2><form id="af" onsubmit="return false">
+ return crumb([["Home","#/"],["Staff dashboard"]])+`<div class="dh"><div class="ph"><h1>STAFF DASHBOARD</h1><div class="rule"></div></div><div class="row" style="margin:0"><span class="pill">${isAdmin()?"Main admin":"Teacher"}</span><button class="btn sm alt" id="lo2">Log out</button></div></div>
+<div class="dtabs" role="tablist"><button class="dt" data-dt="live">Live exams<span class="badge" id="tbadge" hidden></span></button><button class="dt" data-dt="assessments">Assessments</button><button class="dt" data-dt="upload">${editId?"Edit assessment":"Upload"}</button><a class="dt" href="#/maker">Exam maker</a><a class="dt" href="#/manage">Manage data</a><button class="dt" data-dt="settings">Settings</button></div>
+<div class="tiles"><div class="tile"><b>${db.a.length}</b><span>Assessments</span></div><div class="tile"><b id="tlive">0</b><span>In an exam now</span></div><div class="tile"><b id="thelp">0</b><span>Help requests</span></div></div>${flash?`<div class="msg">${flash}</div>`:""}
+<div class="panel" data-t="live"><h2>Live exams and help requests <span class="badge" id="lvbadge" hidden></span></h2><div id="live"></div><p class="note">${REMOTE?"Updates from student devices arrive every ~20 seconds. The list shows the students who need attention first.":"Demo: updates reach teachers in this browser only. Connect Supabase to reach other devices."}</p></div>
+<div class="panel" data-t="upload"><h2>${editId?"Edit assessment":"Upload assessment"}</h2><form id="af" onsubmit="return false">
 <div class="two"><div><label for="fy">Year / class</label><select id="fy">${yearOpts(e.year)}</select></div>
 <div><label for="fc">Assessment category</label><select id="fc">${CATS.map(c=>`<option value="${c.k}"${e.cat===c.k?" selected":""}>${c.n}</option>`).join("")}</select></div></div>
 <label for="ft">Title</label><input id="ft" value="${esc(e.title)}" required>
@@ -587,8 +600,8 @@ function staffDash(){const e=db.a.find(a=>a.id===editId)||{};
 <div class="two"><div><label class="chk" for="fsec"><input type="checkbox" id="fsec"${e.secure===false?"":" checked"}>Secure exam mode for HTML files</label><p class="note" style="margin-top:4px">Full screen, no going back, help button for students, live alerts for you.</p></div>
 <div><label for="flim">Time limit in minutes (optional)</label><input id="flim" type="number" min="0" max="300" value="${e.limit||""}" placeholder="e.g. 40"><p class="note" style="margin-top:4px">Students can leave this many minutes plus 2 after they start, even if their exam does not report a submission.</p></div></div>
 <div class="row"><button class="btn" id="fs">${editId?"Save changes":"Upload"}</button>${editId?'<button class="btn alt" id="fx">Cancel</button>':""}</div></form></div>
-<div class="panel"><h2>Uploaded assessments</h2>${db.a.length?`<div class="tw"><table><tr><th>Title</th><th>Class</th><th>Category</th><th>Type</th><th></th></tr>${db.a.map(a=>`<tr><td>${esc(a.title)}</td><td>Year ${a.year}</td><td>${catOf(a.cat).n}</td><td>${kindName(a.kind)}${a.kind==="html"&&a.secure!==false?" · Secure":""}</td><td style="white-space:nowrap"><a class="btn sm alt" href="#/preview/${a.id}">Preview</a> <button class="btn sm alt" data-e="${a.id}">Edit</button> <button class="btn sm danger" data-d="${a.id}">Delete</button></td></tr>`).join("")}</table></div>`:'<p class="note">Nothing uploaded yet.</p>'}</div>
-<div class="grid" style="align-items:start"><div class="panel" style="margin:0"><h2>Class passwords</h2><p class="note">Type a new password to set or change it.</p>${SUBJECTS.flatMap(s=>s.years).map(y=>`<label for="pw${y}">Year ${y} ${db.pw[y]?"(protected)":"(open)"}</label><input id="pw${y}" type="text" autocomplete="off" placeholder="New password">${db.pw[y]?`<button class="btn sm alt" style="margin-top:6px" data-rp="${y}">Remove protection</button>`:""}`).join("")}<div class="row"><button class="btn sm" id="pws">Save passwords</button></div></div>
+<div class="panel" data-t="assessments"><h2>Uploaded assessments</h2>${db.a.length?`<div class="tw"><table><tr><th>Title</th><th>Class</th><th>Category</th><th>Type</th><th></th></tr>${db.a.map(a=>`<tr><td>${esc(a.title)}</td><td>Year ${a.year}</td><td>${catOf(a.cat).n}</td><td>${kindName(a.kind)}${a.kind==="html"&&a.secure!==false?" · Secure":""}</td><td style="white-space:nowrap"><a class="btn sm alt" href="#/preview/${a.id}">Preview</a> <button class="btn sm alt" data-e="${a.id}">Edit</button> <button class="btn sm danger" data-d="${a.id}">Delete</button></td></tr>`).join("")}</table></div>`:'<p class="note">Nothing uploaded yet.</p>'}</div>
+<div class="grid" data-t="settings" style="align-items:start"><div class="panel" style="margin:0"><h2>Class passwords</h2><p class="note">Type a new password to set or change it.</p>${SUBJECTS.flatMap(s=>s.years).map(y=>`<label for="pw${y}">Year ${y} ${db.pw[y]?"(protected)":"(open)"}</label><input id="pw${y}" type="text" autocomplete="off" placeholder="New password">${db.pw[y]?`<button class="btn sm alt" style="margin-top:6px" data-rp="${y}">Remove protection</button>`:""}`).join("")}<div class="row"><button class="btn sm" id="pws">Save passwords</button></div></div>
 <div class="panel" style="margin:0"><h2>Google Classroom links</h2>${db.links.map((l,i)=>`<p style="margin:8px 0">${esc(l.title)} <button class="btn sm danger" data-l="${i}">Remove</button></p>`).join("")}<label for="lt">Title</label><input id="lt"><label for="lu">Link</label><input id="lu" type="url"><div class="row"><button class="btn sm" id="lb">Add link</button> <button class="btn sm alt" id="lo">Log out</button></div></div></div>
 <p class="note">${REMOTE?"Everything here is saved online in your Supabase project.":"Demo build: data is saved in this browser only. Set SUPABASE_URL to save online."}</p>`}
 function persist(m){if(!API.save(db))flash='<b>Not saved.</b> The file is too large for browser storage. Use a smaller file or connect the backend.';else flash=m;route()}
@@ -598,9 +611,9 @@ function bindDash(){
   Object.assign(rec,{year:+$("#fy").value,cat:$("#fc").value,title:t,desc:$("#fd").value.trim(),secure:$("#fsec").checked,limit:Math.max(0,+$("#flim").value||0)});
   if(f){rec.url=await readFile(f);rec.file=f.name;rec.kind=kindOf(f.name)}else if(l){rec.url=l;rec.kind="link";rec.file=""}else if(!old){flash="Choose a file or enter a form link.";return route()}
   if(rec.kind==="file"){flash="That file type is not supported. Use HTML, PDF, Word, JPG or PNG.";return route()}
-  db.a=old?db.a.map(a=>a.id===editId?rec:a):[...db.a,rec];const m=editId?"Changes saved.":"Assessment uploaded.";editId=null;persist(m)};
+  db.a=old?db.a.map(a=>a.id===editId?rec:a):[...db.a,rec];const m=editId?"Changes saved.":"Assessment uploaded.";editId=null;DT="assessments";persist(m)};
  if($("#fx"))$("#fx").onclick=()=>{editId=null;flash="";route()};
- $$("[data-e]").forEach(b=>b.onclick=()=>{editId=b.dataset.e;flash="";route();scrollTo(0,0)});
+ $$("[data-e]").forEach(b=>b.onclick=()=>{editId=b.dataset.e;DT="upload";flash="";route();scrollTo(0,0)});
  $$("[data-d]").forEach(b=>b.onclick=()=>{if(b.dataset.armed){db.a=db.a.filter(a=>a.id!==b.dataset.d);persist("Assessment deleted.")}else{b.dataset.armed="1";b.textContent="Confirm delete";setTimeout(()=>{b.dataset.armed="";b.textContent="Delete"},4000)}});
  $("#pws").onclick=async()=>{for(const s of SUBJECTS)for(const y of s.years){const v=$("#pw"+y).value;if(v)db.pw[y]=await sha(v)}persist("Passwords saved.")};
  $$("[data-rp]").forEach(b=>b.onclick=()=>{delete db.pw[b.dataset.rp];persist("Password protection removed for Year "+b.dataset.rp+".")});
@@ -648,7 +661,7 @@ function refreshLive(L){
  const box=$("#live");if(!box)return;
  const n=Date.now(),ACT=["active","help","paused"];L=L.slice().sort((a,b)=>(b.state==="help")-(a.state==="help")||String(a.name).localeCompare(b.name));
  const sig=JSON.stringify(L.map(s=>({...s,hb:n-(s.hb||0)>15000})));
- const nh=L.filter(s=>s.state==="help").length,bd=$("#lvbadge");if(bd){bd.hidden=!nh;bd.textContent=nh}
+ const nh=L.filter(s=>s.state==="help").length,bd=$("#lvbadge");if(bd){bd.hidden=!nh;bd.textContent=nh}{const tb=$("#tbadge");if(tb){tb.hidden=!nh;tb.textContent=nh}const a=$("#tlive");if(a)a.textContent=L.filter(s=>ACT.includes(s.state)).length;const h=$("#thelp");if(h)h.textContent=nh}
  if(sig===liveSig)return;
  const ae=document.activeElement;if(ae&&box.contains(ae)&&/^(TEXTAREA|SELECT)$/.test(ae.tagName))return;   // do not redraw while the teacher is choosing or typing
  liveSig=sig;
@@ -880,7 +893,7 @@ addEventListener("hashchange",()=>{
  flash="";editId=null;route();scrollTo(0,0)});
 $("#logoH").src=LOGO;$("#logoF").src=LOGO;
 setInterval(watchLive,2000);
-{const _sd=staffDash,_bd=bindDash;staffDash=function(){return RESP()+_sd.apply(this,arguments)};bindDash=function(){_bd.apply(this,arguments);bindRes()}}
+{const _sd=staffDash,_bd=bindDash;staffDash=function(){return _sd.apply(this,arguments)};bindDash=function(){_bd.apply(this,arguments);bindRes()}}
 /* ===== Main admin: teachers + student roster ===== */
 const isAdmin=()=>ss_get("ca_role")==="admin";
 let UQ={y:"",q:""},UD={st:[],ro:[]};
@@ -901,7 +914,10 @@ function drawUsers(){const box=$("#usr");if(!box)return;const f=UFILT(),act=UD.r
  $$("[data-ra]").forEach(c=>c.onchange=()=>pat([c.dataset.ra],c.checked));
  $$("[data-sr]").forEach(b=>b.onclick=async()=>{if(b.dataset.armed){await sb("/rest/v1/staff_users?email=eq."+enc(b.dataset.sr),{method:"DELETE"});loadUsers()}else{b.dataset.armed="1";b.textContent="Confirm";setTimeout(()=>{b.dataset.armed="";b.textContent="Remove"},4000)}});
  $("#ua").onclick=async()=>{const n=$("#un").value.trim(),e=$("#ue").value.trim().toLowerCase();if(!n||!/^\S+@\S+\.\S+$/.test(e)){toast("Enter a name and a valid email.");return}const r=await sb("/rest/v1/staff_users",{method:"POST",body:JSON.stringify({email:e,name:n,role:"teacher"}),headers:{Prefer:"return=minimal"}});toast(r.ok?"Teacher added.":"Could not add (already listed?).");loadUsers()}}
-{const _s2=staffDash,_b2=bindDash;staffDash=function(){return USERS()+_s2.apply(this,arguments)};bindDash=function(){_b2.apply(this,arguments)}}
+{const _s2=staffDash,_b2=bindDash;staffDash=function(){return _s2.apply(this,arguments)};bindDash=function(){_b2.apply(this,arguments);dashInit()}}
+let DT="live";
+function dashTab(t){DT=t;$$("[data-t]").forEach(p=>p.hidden=p.dataset.t!==t);$$("[data-dt]").forEach(b=>b.classList.toggle("on",b.dataset.dt===t))}
+function dashInit(){$$("[data-dt]").forEach(b=>b.onclick=()=>dashTab(b.dataset.dt));const l2=$("#lo2");if(l2)l2.onclick=()=>$("#lo").click();dashTab(DT)}
 
 /* ===== Manage Data: results, students, teachers (select all / one by one, edit, delete) ===== */
 const MANAGE_CARD=()=>`<div class="panel"><h2>Manage data</h2><p class="note" style="margin-top:6px">See, edit and delete student results. Add, edit and delete students and teachers. Run the connection test.</p><div class="row"><a class="btn" href="#/manage">Open Manage Data</a></div></div>`;
