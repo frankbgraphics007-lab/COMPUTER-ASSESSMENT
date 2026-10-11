@@ -1337,12 +1337,17 @@ input,select,textarea{border-radius:8px;transition:border-color .25s,box-shadow 
 (function(){
 const nz=s=>String(s||"").toUpperCase().replace(/\s+/g," ").trim();
 const ACT=["active","help","paused"],DONE=["done","ended"];
-let RM=null,RML=false,LC=null;const LSEL=new Set();
-
-/* ---------- 1. LIVE EXAMS GROUPED BY CLASS ---------- */
+let RM=null,RML=false,LY=null,LG=null,LC=null;const LSEL=new Set();
+const nat=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
+const gOf=(sex,cls)=>{const s=String(sex||"").toUpperCase();if(s==="M")return"Boys";if(s==="F")return"Girls";const m=String(cls||"").toUpperCase().match(/^\d+\s*([BG])/);return m?(m[1]==="B"?"Boys":"Girls"):"Unknown"};
+const mainName=(y,g)=>"Year "+y+" "+g;
+/* ---------- 1. LIVE EXAMS: YEAR > BOYS/GIRLS > STREAM (Year 10: Boys/Girls > all students) ---------- */
 function loadRM(){if(RM||RML||!REMOTE||!isStaff())return;RML=true;
- fetchAll("roster","select=name,cls,year&order=id").then(d=>{RM={};(d||[]).forEach(r=>RM[nz(r.name)]=r.cls)}).catch(()=>{RM={}}).then(()=>{RML=false;liveSig=""})}
-const clsOf=s=>(RM&&RM[nz(s.name)])||("Year "+s.year);
+ fetchAll("roster","select=name,cls,year,sex&order=id").then(d=>{RM={};(d||[]).forEach(r=>RM[nz(r.name)]=r)}).catch(()=>{RM={}}).then(()=>{RML=false;liveSig="";if($("#mgbody")&&MG.data[MG.tab])mgDraw()})}
+const inf=s=>{const r=(RM&&RM[nz(s.name)])||{};return{y:+s.year||+r.year||0,g:gOf(r.sex,r.cls),c:r.cls||"Unassigned"}};
+const clsOf=s=>inf(s).c;
+const inScope=s=>{const i=inf(s);return(!LY||i.y===LY)&&(!LG||i.g===LG)&&(!LC||i.c===LC)};
+const scopeLab=()=>[LY&&"Year "+LY,LG,LC].filter(Boolean).join(" › ")||"all";
 
 function stuCard(s,n){
  const off=ACT.includes(s.state)&&n-(s.hb||0)>15000,v=s.viol||[],sid=esc(s.sid),live=ACT.includes(s.state),fin=DONE.includes(s.state);let btn="";
@@ -1366,24 +1371,37 @@ refreshLive=function(L){
  const nh=L.filter(s=>s.state==="help").length,bd=$("#lvbadge");
  if(bd){bd.hidden=!nh;bd.textContent=nh}
  {const tb=$("#tbadge");if(tb){tb.hidden=!nh;tb.textContent=nh}const a=$("#tlive");if(a)a.textContent=L.filter(s=>ACT.includes(s.state)).length;const h=$("#thelp");if(h)h.textContent=nh}
- const sig=JSON.stringify([LC,RM?1:0,[...LSEL],L.map(s=>({...s,hb:n-(s.hb||0)>15000}))]);
+ const sig=JSON.stringify([LY,LG,LC,RM?1:0,[...LSEL],L.map(s=>({...s,hb:n-(s.hb||0)>15000}))]);
  if(sig===liveSig)return;
  const ae=document.activeElement;if(ae&&box.contains(ae)&&/^(TEXTAREA|SELECT)$/.test(ae.tagName))return;
  liveSig=sig;
- if(!L.length){LC=null;box.innerHTML='<div class="empty">No students are in an exam right now. They appear here when they begin a secure exam.</div>';return}
- const G={};L.forEach(s=>(G[clsOf(s)]=G[clsOf(s)]||[]).push(s));
- if(LC&&!G[LC])LC=null;
- if(!LC){
-  const names=Object.keys(G).sort((a,b)=>G[b].filter(s=>s.state==="help").length-G[a].filter(s=>s.state==="help").length||a.localeCompare(b,undefined,{numeric:true}));
-  const act=L.filter(s=>ACT.includes(s.state));
-  box.innerHTML=(act.length>1?`<details class="lv all" data-ok="ALL"${dr("ALL").o?" open":""}><summary><b>Message all students in exams (${act.length})</b></summary>${compose("ALL","all "+act.length+" students")}</details>`:"")+
-  `<p class="note">Click a class to see its students.</p><div class="grid">`+names.map(c=>{const g=G[c],a=g.filter(s=>ACT.includes(s.state)).length,h=g.filter(s=>s.state==="help").length,d=g.filter(s=>DONE.includes(s.state)).length;
-   return `<button class="card cc${h?" help":""}" data-lcls="${esc(c)}"><h3>${esc(c)}<span class="big">${g.length}</span></h3><p>${a} in exam${d?`, ${d} finished/ended`:""}</p><p style="margin-top:8px">${h?`<span class="tag bad">${h} help request${h>1?"s":""}</span>`:'<span class="tag ok">No alerts</span>'}</p></button>`}).join("")+`</div>`;return}
- const g=G[LC],act=g.filter(s=>ACT.includes(s.state)),fin=g.filter(s=>DONE.includes(s.state)),selN=fin.filter(s=>LSEL.has(s.sid)).length;
- box.innerHTML=`<div class="lvbar"><button class="btn sm alt" data-lback="1">← All classes</button><h3 style="font-size:1.6rem">${esc(LC)}</h3><span class="tag">${g.length} students</span><span class="tag">${act.length} in exam</span></div>
- ${fin.length?`<div class="lvbar"><label class="chk" style="margin:0"><input type="checkbox" data-lselall="1"${selN&&selN===fin.length?" checked":""}>Select all finished/ended (${fin.length})</label><button class="btn sm danger" data-ldelsel="1"${selN?"":" disabled"}>Delete selected (${selN})</button></div>`:""}
- ${act.length>1?`<details class="lv all" data-ok="CLASS"${dr("CLASS").o?" open":""}><summary><b>Message all in ${esc(LC)} (${act.length})</b></summary>${compose("CLASS","all "+act.length+" students in "+LC)}</details>`:""}
- ${g.map(s=>stuCard(s,n)).join("")}`}
+ if(!L.length){LY=LG=LC=null;box.innerHTML='<div class="empty">No students are in an exam right now. They appear here when they begin a secure exam.</div>';return}
+ if(LY&&!L.some(s=>inf(s).y===LY))LY=LG=LC=null;
+ if(LG&&!L.some(s=>inf(s).y===LY&&inf(s).g===LG))LG=LC=null;
+ if(LC&&!L.some(s=>inf(s).y===LY&&inf(s).g===LG&&inf(s).c===LC))LC=null;
+ const card=(lab,arr,attr,val)=>{const a=arr.filter(s=>ACT.includes(s.state)).length,h=arr.filter(s=>s.state==="help").length,d=arr.filter(s=>DONE.includes(s.state)).length;
+  return `<button class="card cc${h?" help":""}" ${attr}="${esc(val)}"><h3>${esc(lab)}<span class="big">${arr.length}</span></h3><p>${a} in exam${d?`, ${d} finished/ended`:""}</p><p style="margin-top:8px">${h?`<span class="tag bad">${h} help request${h>1?"s":""}</span>`:'<span class="tag ok">No alerts</span>'}</p></button>`};
+ const depth=LC?3:LG?2:LY?1:0;
+ let head="",body="",stu=null;
+ if(depth){head=`<div class="lvbar"><button class="btn sm alt" data-nav="${depth-1}">← Back</button><button class="btn sm alt" data-nav="0">All years</button>${depth>1?`<button class="btn sm alt" data-nav="1">Year ${LY}</button>`:""}${depth>2?`<button class="btn sm alt" data-nav="2">${esc(LG)}</button>`:""}<h3 style="font-size:1.5rem;margin:0 6px">${esc(scopeLab())}</h3></div>`}
+ if(!LY){const ys=[...new Set(L.map(s=>inf(s).y))].sort((a,b)=>a-b);
+  body=`<p class="note">Choose a year.</p><div class="grid">${ys.map(y=>card("Year "+y,L.filter(s=>inf(s).y===y),"data-ny",y)).join("")}</div>`}
+ else{const Y=L.filter(s=>inf(s).y===LY);
+  if(!LG){const gs=["Boys","Girls","Unknown"].filter(g=>Y.some(s=>inf(s).g===g));
+   body=`<p class="note">Choose Boys or Girls.</p><div class="grid">${gs.map(g=>card(g,Y.filter(s=>inf(s).g===g),"data-ng",g)).join("")}</div>`}
+  else{const G=Y.filter(s=>inf(s).g===LG);
+   if(LY===10||LC){stu=LG===undefined?[]:G.filter(s=>LY===10||inf(s).c===LC)}
+   else{const cs=[...new Set(G.map(s=>inf(s).c))].sort(nat);
+    body=`<p class="note">Choose a stream.</p><div class="grid">${cs.map(c=>card(c,G.filter(s=>inf(s).c===c),"data-nc",c)).join("")}</div>`}}}
+ const act=L.filter(s=>ACT.includes(s.state)&&(!LY||inScope(s)));
+ const msg=act.length>1?(!LY?`<details class="lv all" data-ok="ALL"${dr("ALL").o?" open":""}><summary><b>Message all students in exams (${act.length})</b></summary>${compose("ALL","all "+act.length+" students")}</details>`
+  :`<details class="lv all" data-ok="CLASS"${dr("CLASS").o?" open":""}><summary><b>Message all in ${esc(scopeLab())} (${act.length})</b></summary>${compose("CLASS","all "+act.length+" students in "+scopeLab())}</details>`):"";
+ let list="";
+ if(stu){const fin=stu.filter(s=>DONE.includes(s.state)),selN=fin.filter(s=>LSEL.has(s.sid)).length;
+  list=`<p class="note">${stu.length} student${stu.length===1?"":"s"}${LY===10?" (all Year 10 "+esc(LG)+", streams not separated)":""}.</p>`+
+  (fin.length?`<div class="lvbar"><label class="chk" style="margin:0"><input type="checkbox" data-lselall="1"${selN&&selN===fin.length?" checked":""}>Select all finished/ended (${fin.length})</label><button class="btn sm danger" data-ldelsel="1"${selN?"":" disabled"}>Delete selected (${selN})</button></div>`:"")+
+  stu.map(s=>stuCard(s,n)).join("")}
+ box.innerHTML=head+msg+body+list}
 
 async function delStudents(sids){
  const L=await Live.list(),nm=sids.length===1?((L.find(s=>s.sid===sids[0])||{}).name||"this student"):sids.length+" students";
@@ -1394,18 +1412,20 @@ async function delStudents(sids){
 async function liveClick(e){
  const t=e.target,redraw=async()=>{liveSig="";refreshLive(await Live.list())};
  let b;
- if(b=t.closest("[data-lcls]")){LC=b.dataset.lcls;return redraw()}
- if(t.closest("[data-lback]")){LC=null;return redraw()}
+ if(b=t.closest("[data-ny]")){LY=+b.dataset.ny;LG=LC=null;return redraw()}
+ if(b=t.closest("[data-ng]")){LG=b.dataset.ng;LC=null;return redraw()}
+ if(b=t.closest("[data-nc]")){LC=b.dataset.nc;return redraw()}
+ if(b=t.closest("[data-nav]")){const d=+b.dataset.nav;if(d<=0)LY=null;if(d<=1)LG=null;LC=null;return redraw()}
  if(b=t.closest("[data-ldel]"))return delStudents([b.dataset.ldel]);
  if(t.closest("[data-ldelsel]"))return delStudents([...LSEL]);
  if(b=t.closest("[data-lsel]")){b.checked?LSEL.add(b.dataset.lsel):LSEL.delete(b.dataset.lsel);return redraw()}
- if(b=t.closest("[data-lselall]")){const L=await Live.list();L.filter(s=>DONE.includes(s.state)&&clsOf(s)===LC).forEach(s=>b.checked?LSEL.add(s.sid):LSEL.delete(s.sid));return redraw()}
+ if(b=t.closest("[data-lselall]")){const L=await Live.list();L.filter(s=>DONE.includes(s.state)&&inScope(s)).forEach(s=>b.checked?LSEL.add(s.sid):LSEL.delete(s.sid));return redraw()}
  if((b=t.closest("[data-send]"))&&b.dataset.send==="CLASS"){
   e.stopPropagation();const m=msgOf("CLASS");if(!m.text){toast("Write your message first.");return}
-  const L=await Live.list(),T=L.filter(s=>ACT.includes(s.state)&&clsOf(s)===LC);if(!T.length){toast("No students in an exam in this class.");return}
+  const L=await Live.list(),T=L.filter(s=>ACT.includes(s.state)&&inScope(s));if(!T.length){toast("No students in an exam here.");return}
   for(const s of T)await Live.message(s.sid,m);
   if(dr("CLASS").p==="custom")dr("CLASS").t="";
-  toast(`${LV[m.level]} sent to ${T.length} students in ${LC}.`);redraw()}}
+  toast(`${LV[m.level]} sent to ${T.length} students (${scopeLab()}).`);redraw()}}
 
 /* ---------- 2. ITEM ANALYSIS + ACADEMIC REPORT ---------- */
 const pc=(a,b)=>b?Math.round(a/b*100):0,stt=p=>p<50?["Re-teach","bad"]:p<70?["Revise","mid"]:["Secure","ok"];
@@ -1456,9 +1476,18 @@ function showReport(reps){
   const h=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Academic report</title><style>body{margin:0;padding:24px;background:#fff;font-family:system-ui,sans-serif}.hd{border-bottom:4px solid #b8923a;padding-bottom:8px;margin-bottom:6px;color:#0b1a3a}${css}</style></head><body><div class="rp"><div class="hd"><b style="font-size:1.3rem">Al Muntazir Islamic International School</b><br>Academic report · ${new Date().toLocaleDateString("en-GB")}</div>${body}</div></body></html>`;
   saveData("academic_report.html",new Blob([h],{type:"text/html;charset=utf-8"}))}}
 
+const mainOfRow=(t,r)=>{if(t==="students")return mainName(r.year,gOf(r.sex,r.cls));const x=RM&&RM[nz(r.name)];return mainName(r.year,gOf(x&&x.sex,x?x.cls:r.cls))};
+TB.students.cols.splice(1,0,["Main class",r=>mainOfRow("students",r)]);TB.students.cols[2][0]="Stream";
+TB.results.cols.splice(1,0,["Main class",r=>mainOfRow("results",r)]);TB.results.cols[2][0]="Stream";
+const _ft=filt;filt=function(t){const r=_ft.apply(this,arguments),m=MG.q[t]&&MG.q[t].m;return m?r.filter(x=>mainOfRow(t,x)===m):r};
 const _md=mgDraw;
-mgDraw=function(){_md.apply(this,arguments);
- if(MG.tab!=="results")return;const c=$("#mgcsv");if(!c||$("#mgan"))return;
+mgDraw=function(){loadRM();_md.apply(this,arguments);
+ const t=MG.tab;if(t!=="results"&&t!=="students")return;
+ const rw=$("#mgbody .row");
+ if(rw&&!$("#mgm")){const set=[...new Set((MG.data[t]||[]).map(r=>mainOfRow(t,r)))].sort(nat),s=document.createElement("select");s.id="mgm";
+  s.innerHTML='<option value="">All main classes</option>'+set.map(x=>`<option${MG.q[t].m===x?" selected":""}>${sx(x)}</option>`).join("");
+  rw.insertBefore(s,rw.children[1]||null);s.onchange=()=>{MG.q[t].m=s.value;MG.pg[t]=0;MG.sel[t].clear();mgDraw()}}
+ if(t!=="results")return;const c=$("#mgcsv");if(!c||$("#mgan"))return;
  const b=document.createElement("button");b.className="btn sm";b.id="mgan";b.textContent="Analysis & report";c.after(b);
  b.onclick=()=>{const S=MG.sel.results,f=filt("results"),list=S.size?f.filter(r=>S.has(r.id)):f;if(!list.length)return toast("No results to analyse.");analyse(list,b)}};
 
