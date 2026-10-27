@@ -1616,5 +1616,210 @@ runAll();
 
 })();
 </script>
+<!-- ============================================================
+ EXAM VERSIONS ADD-ON
+ Paste this whole <script> block directly BEFORE the very last
+ </body></html> of your index.html (after the PORTAL UPGRADE script).
+ Nothing else in index.html is changed.
+ Run 5-versions-setup.sql in Supabase first.
+============================================================ -->
+<script id="ver-js">
+(function(){
+if(typeof REMOTE==="undefined"||!REMOTE)return;   /* versions need the online server */
+
+/* Page that the portal itself stores for an exam with versions. Students never see it:
+   when they begin, the server gives them one real version instead. */
+const PH='<!doctype html><html><head><meta charset="utf-8"><title>Exam with versions</title></head><body data-versions="1" style="font:16px system-ui,sans-serif;padding:32px"><h2>This exam has several versions</h2><p>Each student receives one version automatically when the exam begins. Use Exam maker, Exam versions, to preview each version.</p></body></html>';
+const ST={available:"Available",draft:"Draft",retired:"Retired"};
+const VX={vers:{},last:null,orig:null};
+let VEDIT=null;
+
+const cancel=()=>{const e=new Error("cancel");e.silent=true;return e};
+const vsfx=l=>String(l||"").replace(/^version\s*/i,"").replace(/[^A-Za-z0-9]+/g,"").toUpperCase().slice(0,10);
+const vnext=labs=>{const h=new Set(labs.map(x=>String(x).toLowerCase()));for(let i=0;i<26;i++){const l="Version "+String.fromCharCode(65+i);if(!h.has(l.toLowerCase()))return l}return"Version "+(labs.length+1)};
+const vtotal=ex=>Math.round(ex.sections.reduce((t,s)=>t+s.questions.reduce((a,q)=>a+q.marks,0),0)*100)/100;
+const vcount=ex=>ex.sections.reduce((t,s)=>t+s.questions.length,0);
+const vcat=a=>{const c=catOf(a.cat);return c?c.n:a.cat};
+const vlist=()=>(db.a||[]).filter(a=>a.versioned);
+const vbad=r=>r.status===404?"The versions tables or functions are not set up. Run 5-versions-setup.sql in Supabase first.":(r.status===401||r.status===403)?"Not allowed. Log in again as staff.":r.status===409?"That version name already exists in this exam.":"Could not save. Check the connection and try again.";
+
+/* ---------- 1. Exam maker: "Publish as" box under the questions check ---------- */
+function vRestore(){const o=VX.orig;if(!o)return;[["mky","y"],["mkc","c"],["mkt","t"],["mkd","d"],["mkl","l"]].forEach(([id,k])=>{const e=$("#"+id);if(e)e.value=o[k]})}
+function vFields(dis){["mky","mkc","mkt","mkd","mkl"].forEach(id=>{const e=$("#"+id);if(e)e.disabled=dis})}
+function vInject(){
+ if(!MK.ex||$("#vbox"))return;const pub=$("#mpub");if(!pub)return;
+ VX.orig={y:$("#mky").value,c:$("#mkc").value,t:$("#mkt").value,d:$("#mkd").value,l:$("#mkl").value};
+ const P=vlist(),ed=VEDIT;let opts;
+ if(ed){const p=P.find(a=>a.id===ed.parent);opts=`<option value="e">Replace ${esc(ed.label)} in: ${esc(p?p.title:"this exam")}</option>`}
+ else opts='<option value="">A normal exam (one paper for everyone)</option><option value="new">A new exam with versions</option>'+P.map(a=>`<option value="p:${esc(a.id)}"${VX.last===a.id?" selected":""}>Add a version to: ${esc(a.title)} (Year ${esc(a.year)}, ${esc(vcat(a))})</option>`).join("");
+ pub.parentNode.insertAdjacentHTML("beforebegin",`<div id="vbox" style="margin-top:18px;padding-top:6px;border-top:1px solid var(--line)"><label for="vsel">Publish as</label><select id="vsel">${opts}</select>
+<div id="vopt" hidden><label for="vlab">Version name</label><input id="vlab" value="Version A" maxlength="30"><p class="note" id="vnote"></p></div>
+${ed?'<div class="row"><button class="btn sm alt" id="vcx" type="button">Cancel editing</button></div>':""}</div>`);
+ $("#vsel").onchange=vSync;
+ if($("#vcx"))$("#vcx").onclick=()=>{VEDIT=null;renderResult()};
+ pub.onclick=mkPublish;
+ vSync()}
+async function vSync(){
+ const sel=$("#vsel");if(!sel)return;
+ const s=sel.value,pub=$("#mpub"),vn=$("#vnote"),vl=$("#vlab"),mks=$("#mks");
+ $("#vopt").hidden=!s;
+ if(!s){vFields(false);vRestore();if(mks)mks.disabled=false;pub.textContent="Publish to portal";return}
+ if(mks){mks.checked=true;mks.disabled=true}   /* versions always use secure exam mode */
+ if(s==="new"){vFields(false);vRestore();vl.readOnly=false;vl.value="Version A";pub.textContent="Publish new exam with versions";
+  vn.textContent="This creates the exam and adds this paper as its first version. Then load the next paper and choose “Add a version to” this exam.";return}
+ const id=s==="e"?VEDIT.parent:s.slice(2),p=vlist().find(a=>a.id===id);
+ if(!p){vn.textContent="That exam was not found.";return}
+ vFields(true);
+ $("#mky").value=p.year;$("#mkc").value=p.cat;$("#mkt").value=p.title;$("#mkd").value=p.desc||"";$("#mkl").value=p.limit||"";
+ pub.textContent=s==="e"?"Replace "+VEDIT.label:"Add this version";
+ vl.readOnly=s==="e";if(s==="e")vl.value=VEDIT.label;
+ vn.textContent="Loading the existing versions…";
+ const r=await rows("exam_versions","parent=eq."+enc(id)+"&select=vid,label,status,marks,qcount&order=label");
+ if(!$("#vsel")||$("#vsel").value!==s)return;
+ if(!r.ok){vn.textContent=vbad(r);return}
+ VX.vers[id]=r.j||[];const labs=VX.vers[id].map(x=>x.label);
+ if(s!=="e")vl.value=vnext(labs);
+ vn.textContent=labs.length?"Already in this exam: "+VX.vers[id].map(x=>x.label+" ("+x.marks+" marks, "+x.qcount+" questions, "+(ST[x.status]||x.status)+")").join("; ")+".":"No versions in this exam yet."}
+
+const _rr=renderResult;
+renderResult=function(){_rr.apply(this,arguments);try{vInject()}catch(e){console.error(e)}};
+
+/* ---------- 2. Publishing a version ---------- */
+const _mp=mkPublish;
+mkPublish=function(){const s=$("#vsel");if(!s||!s.value)return _mp.apply(this,arguments);return vPublish()};
+async function vPublish(){
+ const btn=$("#mpub"),sel=$("#vsel").value;if(!MK.ex)return;
+ const old=btn.textContent;btn.disabled=true;btn.textContent="Saving…";
+ let created=null,done=false;
+ try{
+  if(!isStaff())throw new Error("Log in as staff first.");
+  const edit=sel==="e"?VEDIT:null;let label=$("#vlab").value.trim().replace(/\s+/g," "),parent,vid,existing=[];
+  if(!label)throw new Error("Give this version a name, for example Version A.");
+  if(edit){parent=vlist().find(a=>a.id===edit.parent);if(!parent)throw new Error("The exam of this version was not found.");label=edit.label;vid=edit.vid}
+  else if(sel==="new"){
+   const title=$("#mkt").value.trim();if(!title)throw new Error("Add a title first.");
+   parent=created={id:"a"+Date.now().toString(36),date:new Date().toISOString().slice(0,10),year:+$("#mky").value,cat:$("#mkc").value,title,desc:$("#mkd").value.trim(),url:textToData(PH),file:"exam-with-versions.html",kind:"html",secure:true,limit:Math.max(0,+$("#mkl").value||0),versioned:true}}
+  else{parent=vlist().find(a=>a.id===sel.slice(2));if(!parent)throw new Error("That exam was not found.")}
+  if(!created){const r=await rows("exam_versions","parent=eq."+enc(parent.id)+"&select=vid,label,marks");if(!r.ok)throw new Error(vbad(r));existing=r.j||[]}
+  if(!edit){
+   const suf=vsfx(label);if(!suf)throw new Error("Use letters or numbers in the version name, for example Version A.");
+   vid=parent.id+"-"+suf;
+   if(existing.some(x=>x.vid===vid||String(x.label).toLowerCase()===label.toLowerCase()))throw new Error(label+" already exists in this exam. Choose another name, or use Edit under Exam versions to replace its questions.")}
+  const total=vtotal(MK.ex),other=existing.filter(x=>x.vid!==vid&&+x.marks!==total);
+  if(other.length&&!await confirmBox(`This version is worth <b>${total}</b> marks, but ${other.map(x=>esc(x.label)+" is worth <b>"+esc(x.marks)+"</b>").join(", ")}. Students would sit papers with different totals. Continue anyway?`,""))throw cancel();
+  if(edit){const st=await rpc("version_stats",{p_parent:parent.id}),me=st.ok&&Array.isArray(st.j)?st.j.find(x=>x.vid===vid):null;
+   if(me&&(me.assigned>0||me.results>0)&&!await confirmBox(`<b>${me.assigned}</b> student(s) already have ${esc(label)} and <b>${me.results}</b> have submitted it. Changing its questions now can make their saved results and marked papers not match the new questions. Continue?`,""))throw cancel()}
+  const ex=exFinal();
+  ex.id=((ex.id||"exam")+"-"+vsfx(label)).toLowerCase().replace(/[^a-z0-9_-]+/g,"-");
+  ex.title=parent.title+" ("+label+")";
+  const sp=splitExam(examHtml(ex,false),vid);
+  if(!sp)throw new Error("Could not prepare the exam. Check the questions and try again.");
+  if(created){
+   db=API.load();db.a=[...db.a,created];
+   if(!API.save(db))throw new Error("Could not save the exam.");
+   await _q;
+   if(!_snap.a.some(x=>x.id===created.id))throw new Error("The exam could not be created online. Check the connection and try again.")}
+  let r=await sb("/rest/v1/exam_keys?on_conflict=aid",{method:"POST",body:JSON.stringify({aid:vid,data:sp.key}),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
+  if(!r.ok)throw new Error(vbad(r));
+  const subj=subjOf(parent.year),row={vid,parent:parent.id,label,mode:subj&&subj.k==="cs"?"cs":"comp",src:MK.text,body:sp.pub,qcount:vcount(MK.ex),marks:total,updated:new Date().toISOString()};
+  if(!edit)row.status="available";
+  r=await sb("/rest/v1/exam_versions?on_conflict=vid",{method:"POST",body:JSON.stringify(row),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
+  if(!r.ok){if(!edit)await sb("/rest/v1/exam_keys?aid=eq."+enc(vid),{method:"DELETE"});throw new Error(vbad(r))}
+  delete KEYC[vid];VX.last=parent.id;VEDIT=null;done=true;
+  btn.textContent="Saved";
+  mkMsg(`${esc(label)} ${edit?"was replaced":"was added"} in <b>${esc(parent.title)}</b> (Year ${esc(parent.year)}, ${esc(vcat(parent))}). Students get one version automatically when they begin. Load the next paper to add another version. <a href="#/class/${parent.year}/${parent.cat}" style="text-decoration:underline">Open that page</a>`,0);
+  vLoad()}
+ catch(e){
+  if(created&&!(_snap.a||[]).some(x=>x.id===created.id))db.a=db.a.filter(a=>a.id!==created.id);
+  if(!(e&&e.silent))mkMsg((e&&e.message)||"Could not save.",1)}
+ finally{if(!done){btn.disabled=false;btn.textContent=old}}}
+
+/* ---------- 3. Exam maker: "Exam versions" panel ---------- */
+const _mv=makerView;
+makerView=function(){return _mv.apply(this,arguments)+`<div class="panel" id="vpanel"><h2>3. Exam versions</h2><p class="note">An exam with versions looks like one exam to students. When a student begins, the server gives them one version and always the same one if they come back. Versions are shared out evenly. Add versions with “Publish as” above.</p><div id="vbody"></div></div>`};
+const _bm=bindMaker;
+bindMaker=function(){_bm.apply(this,arguments);const b=$("#vbody");if(b){b.onclick=vClick;b.onchange=vChange;vLoad()}};
+async function vLoad(){
+ const box=$("#vbody");if(!box)return;
+ db=API.load();const P=vlist();
+ if(!P.length){box.innerHTML='<div class="empty">No exam with versions yet. Choose “A new exam with versions” under Publish as, then add the other papers to it.</div>';return}
+ box.innerHTML='<p class="note">Loading…</p>';
+ let html="",bad=null;
+ for(const p of P){
+  const r=await rpc("version_stats",{p_parent:p.id});
+  if(!r.ok){bad=r;break}
+  const L=Array.isArray(r.j)?r.j:[],na=L.filter(v=>v.status==="available").length,diff=new Set(L.map(v=>+v.marks)).size>1;
+  html+=`<div class="lv"><div class="lv-h"><strong>${esc(p.title)}</strong><span class="tag">Year ${esc(p.year)}</span><span class="tag">${esc(vcat(p))}</span><span class="tag ${na?"ok":"bad"}">${na} available</span></div>`+
+  (L.length?`<div class="tw"><table><tr><th>Version</th><th>Status</th><th>Questions</th><th>Marks</th><th>Students</th><th>Results</th><th></th></tr>${L.map(v=>{const dis=(v.assigned>0||v.results>0)?' disabled title="Students already have this version. Retire it instead."':"";
+   return `<tr><td><b>${esc(v.label)}</b></td><td><select data-vst="${esc(v.vid)}">${["available","draft","retired"].map(s=>`<option value="${s}"${v.status===s?" selected":""}>${ST[s]}</option>`).join("")}</select></td><td>${esc(v.qcount)}</td><td>${esc(v.marks)}</td><td>${esc(v.assigned)}</td><td>${esc(v.results)}</td><td style="white-space:nowrap"><button class="btn sm alt" data-vpv="${esc(v.vid)}">Preview</button> <button class="btn sm alt" data-vedit="${esc(v.vid)}">Edit</button> <button class="btn sm danger" data-vdel="${esc(v.vid)}"${dis}>Delete</button></td></tr>`}).join("")}</table></div>
+<p class="note">Retire a version to stop giving it to new students. Students who already have it keep it.</p>`:'<p class="note">No versions yet. Add the first one from the publish panel above.</p>')+
+  (L.length&&!na?'<div class="msg bad">No version is available, so students cannot start this exam. Set one to Available.</div>':"")+
+  (diff?'<div class="msg">The versions have different total marks. Students would sit papers with different totals.</div>':"")+`</div>`}
+ if(!$("#vbody"))return;
+ box.innerHTML=bad?`<div class="msg bad">${esc(bad.status===404?"The versions functions are not set up. Run 5-versions-setup.sql in Supabase first.":"Could not load the versions. Check the connection or log in again.")}</div>`:html}
+async function vClick(e){
+ const t=e.target;let b;
+ if(b=t.closest("[data-vpv]")){
+  const r=await rows("exam_versions","vid=eq."+enc(b.dataset.vpv)+"&select=label,body"),v=r.ok&&r.j&&r.j[0];
+  if(!v||!v.body){toast("Could not load this version.");return}
+  const o=mgModal(`<div class="row" style="margin:0 0 8px"><b>${esc(v.label)}</b><span class="note">Preview only. Answers are not counted.</span><button class="btn sm alt" id="vpx" type="button">Close</button></div><iframe class="viewer" id="vpf" title="Preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin"></iframe>`);
+  o.firstChild.style.maxWidth="1000px";o.querySelector("#vpx").onclick=()=>o.remove();o.querySelector("#vpf").srcdoc=injectLogo(v.body);return}
+ if(b=t.closest("[data-vedit]")){
+  const r=await rows("exam_versions","vid=eq."+enc(b.dataset.vedit)+"&select=vid,parent,label,src"),v=r.ok&&r.j&&r.j[0];
+  if(!v||!v.src){toast("The question text of this version was not saved, so it cannot be edited. Add it again as a new version.");return}
+  VEDIT={vid:v.vid,parent:v.parent,label:v.label};
+  const ta=$("#mt");if(ta){ta.value=v.src;const d=ta.closest("details");if(d)d.open=true}
+  mkCheck(v.src);const m=$("#mres");if(m&&!m.hidden)m.scrollIntoView({behavior:"smooth",block:"start"});
+  toast("Change the questions, then press Replace "+v.label+".");return}
+ if(b=t.closest("[data-vdel]")){
+  if(b.disabled)return;
+  if(!await confirmBox("Delete this version permanently? Its questions and answer key are removed. This cannot be undone.",""))return;
+  const vid=b.dataset.vdel,r=await sb("/rest/v1/exam_versions?vid=eq."+enc(vid),{method:"DELETE",headers:{Prefer:"return=minimal"}});
+  if(r.ok)await sb("/rest/v1/exam_keys?aid=eq."+enc(vid),{method:"DELETE"});
+  delete KEYC[vid];toast(r.ok?"Version deleted.":"Could not delete this version.");vLoad()}}
+async function vChange(e){
+ const s=e.target.closest&&e.target.closest("[data-vst]");if(!s)return;
+ const r=await sb("/rest/v1/exam_versions?vid=eq."+enc(s.dataset.vst),{method:"PATCH",body:JSON.stringify({status:s.value,updated:new Date().toISOString()}),headers:{Prefer:"return=minimal"}});
+ toast(r.ok?"Status updated.":"Could not change the status.");vLoad()}
+
+/* ---------- 4. Deleting an exam with versions also removes its versions ---------- */
+async function vCleanup(ids){
+ for(const pid of ids){
+  const r=await rows("exam_versions","parent=eq."+enc(pid)+"&select=vid"),vids=(r.ok&&r.j||[]).map(x=>x.vid);
+  if(vids.length)await sb("/rest/v1/exam_keys?aid=in."+enc("("+vids.map(v=>'"'+String(v).replace(/"/g,"")+'"').join(",")+")"),{method:"DELETE"});
+  await sb("/rest/v1/exam_assignments?parent=eq."+enc(pid),{method:"DELETE"});
+  await sb("/rest/v1/exam_versions?parent=eq."+enc(pid),{method:"DELETE"});
+  vids.forEach(v=>{delete KEYC[v]})}}
+const _persist=persist;
+persist=function(){
+ let gone=[];
+ try{if(isStaff())gone=(_snap.a||[]).filter(o=>o.versioned&&!db.a.some(a=>a.id===o.id)).map(o=>o.id)}catch(e){}
+ const r=_persist.apply(this,arguments);
+ if(gone.length)_q.then(()=>{const left=gone.filter(id=>!(_snap.a||[]).some(x=>x.id===id));if(left.length)return vCleanup(left)}).catch(()=>{});
+ return r};
+const _bdv=bindDash;
+bindDash=function(){_bdv.apply(this,arguments);
+ try{$$('[data-t="assessments"] tr').forEach(r=>{const d=r.querySelector("[data-d]");if(!d)return;const a=db.a.find(x=>x.id===d.dataset.d);
+  if(a&&a.versioned&&r.cells.length>2){const c=r.cells[r.cells.length-2];if(!c.querySelector(".tag"))c.insertAdjacentHTML("beforeend",' <span class="tag ok">Versions</span>')}})}catch(e){}};
+
+/* ---------- 5. Student: the server picks the version when "Begin exam" is pressed ---------- */
+const _be=beginExam;
+beginExam=async function(a,name){
+ let marked=false;try{marked=!!(a&&a.url&&/data-versions="1"/.test(dataToText(a.url)))}catch(e){}
+ if(a&&(a.versioned||marked)&&!isStaff()){
+  const say=m=>{const e=$("#exe");if(e)e.innerHTML='<div class="msg bad">'+esc(m)+'</div>'},btn=$("#exb");
+  const cls=window.__stuCls||ss_get("ca_cls_"+a.id)||null;if(window.__stuCls)ss_set("ca_cls_"+a.id,window.__stuCls);
+  if(btn)btn.disabled=true;
+  let r=null;try{r=await rpc("assign_version",{p_parent:a.id,p_name:name,p_pw:ss_get("ca_pwh_"+a.year)||"",p_cls:cls})}catch(e){}
+  if(btn)btn.disabled=false;
+  const j=r&&r.ok?r.j:null;
+  if(!j||!j.ok){
+   const M={password:"The class password is needed. Go back and enter it.",student:"Your name is not on the class list. Choose your wing and tap your name.",ambiguous:"More than one student has this name. Tell your teacher.",noversion:"No exam version is ready yet. Tell your teacher.",version_missing:"Your exam version could not be found. Tell your teacher.",notfound:"This exam was not found."};
+   say((j&&M[j.err])||(r&&r.status===404?"Exam versions are not set up on the server. Tell your teacher.":"Could not load your exam. Check your internet connection and try again."));return}
+  if(j.versioned){a=Object.assign({},a,{url:textToData(j.body),title:a.title+" · "+j.label,vid:j.vid})}
+  else if(marked){say("This exam has no versions yet. Tell your teacher.");return}}
+ return _be.call(this,a,name)};
+})();
+</script>
 
 </body></html>
