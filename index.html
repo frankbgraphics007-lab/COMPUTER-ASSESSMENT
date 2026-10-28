@@ -1822,4 +1822,362 @@ beginExam=async function(a,name){
 })();
 </script>
 
+<!--VER-ADDON-START v1-->
+<style id="ver-style">
+/* Exam Maker: versions and mode buttons */
+.v-modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0}
+.v-mode{display:flex;flex-direction:column;gap:2px;align-items:center;padding:16px 10px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;box-shadow:0 6px 16px -8px rgba(11,26,58,.35);transition:transform .2s,box-shadow .25s,border-color .2s,background .2s,color .2s}
+.v-mode b{font:700 1.05rem var(--sans);letter-spacing:.06em}.v-mode span{font-size:.85rem;color:var(--mut)}
+.v-mode:hover{transform:translateY(-2px);border-color:var(--gold);box-shadow:0 12px 24px -10px rgba(184,146,58,.55)}
+.v-mode.on{background:linear-gradient(180deg,#14307a,#0b1a3a);border-color:var(--gold);color:var(--goldl)}.v-mode.on span{color:#c9d3ee}
+.v-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 8px}
+.v-chip{padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 .92rem var(--sans);cursor:pointer;transition:transform .2s,box-shadow .2s,border-color .2s,background .2s;box-shadow:0 2px 6px rgba(11,26,58,.1)}
+.v-chip i{font-style:normal;margin-left:4px;color:var(--mut)}.v-chip:hover{transform:translateY(-1px);border-color:var(--gold)}
+.v-chip.on{background:var(--navy);color:var(--goldl);border-color:var(--gold)}.v-chip.on i{color:var(--goldl)}
+.v-chip.add{border-style:dashed;color:var(--link)}.v-chip:disabled{opacity:.5;cursor:not-allowed}
+</style>
+<script id="ver-addon">
+(function(){
+if(window.__VER)return;window.__VER=1;
+/* ===== Computing (Year 7-9) exam parser =====
+   Reads the layout of the Computing template: title, Duration, Total Marks, Topics, SECTION headings,
+   numbered questions, A-D options, code blocks. Works with Markdown text AND with plain text from Word. */
+const cpEsc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const cpInline=s=>cpEsc(s).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
+const cpPlain=s=>String(s).replace(/`/g,"").replace(/\*\*/g,"").replace(/^#+\s*/,"").trim();
+const cpTitle=s=>String(s).toLowerCase().replace(/(^|[\s(\/:–-])([a-z])/g,(m,a,b)=>a+b.toUpperCase()).replace(/\bAnd\b/g,"and").replace(/\bOf\b/g,"of").replace(/\bTo\b/g,"to");
+const cpSlug=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,24).replace(/-$/,"")||"exam";
+function cpHash(s){let h=5381;for(const c of s)h=((h<<5)+h+c.charCodeAt(0))>>>0;return h.toString(36).slice(0,5)}
+/* answer key text: "1 B, 2 C" or "1. B" or "1-B" or one per line or a table */
+function cpKey(txt){const m={},re=/(?:^|[\s,;|(])(\d{1,3})\s*[.:)\-–—=]?\s*\(?([A-Ha-h])\)?(?=$|[\s,;|)])/g;let x;
+ const t=String(txt||"").replace(/\r/g,"");while((x=re.exec(t))){m[+x[1]]=x[2].toUpperCase();re.lastIndex=x.index+x[0].length-1}return m}
+const CP_SEC=/^(?:#+\s*)?(?:\*\*)?\s*SECTION\s+([A-Za-z0-9]+)\b\s*[:\-–—.]?\s*(.*?)\s*(?:\*\*)?\s*$/i;
+const CP_MARKS=/questions?\s*(\d+)\s*[–\-—]+\s*(\d+)\W+(\d+(?:\.\d+)?)\s*marks?/i;
+const CP_KEYHEAD=/^(?:#+\s*)?\**\s*(answer\s*key|answers|marking\s*scheme|mark\s*scheme)\b/i;
+const CP_ANS=/^\s*(?:\*\*)?\s*(?:correct\s+)?answer\s*(?:\*\*)?\s*[:\-]\s*(?:\*\*)?\s*\(?([A-Ha-h])\)?\b/i;
+const CP_Q=/^\s*(?:\*\*)?\s*(?:Q(?:uestion)?\s*)?(\d{1,3})\s*[.)]\s*(?:\*\*)?\s*(.*)$/i;
+const CP_OPT=/^\s*(?:\*\*)?\(?([A-Ha-h])\s*[.)]\s*(?:\*\*)?\s*(.*)$/;
+function parseComputing(raw,keyTxt){
+ const errs=[],warns=[];
+ const lines=String(raw||"").replace(/\r/g,"").replace(/[\u00a0\u200b]/g," ").split("\n");
+ /* tokens: code fences become one token */
+ const T=[];let fence=null;
+ for(const ln of lines){
+  if(/^\s*```/.test(ln)){if(fence===null)fence=[];else{T.push({code:fence});fence=null}continue}
+  if(fence!==null){fence.push(ln.replace(/\s+$/,""));continue}
+  T.push({s:ln.replace(/\s+$/,"")})}
+ if(fence!==null){T.push({code:fence});warns.push("A code block was not closed with ``` . The rest of the text was treated as code.")}
+ const strict=T.filter(t=>t.s!==undefined&&/^\s*\*\*\s*\d{1,3}\s*[.)]\s*\*\*/.test(t.s)).length>=3;
+ const ex={id:"",title:"",subject:"Computing",level:"",topic:"",durationMinutes:null,sections:[]};
+ let main="",sub="",declared=null,instr=[],inInstr=false,sec=null,q=null,expect=1,keyDoc={},inKey=false,keyLines=[],secMarks=null,started=false;
+ const inline={};
+ const closeQ=()=>{if(q&&sec){q.n=q.num;sec.qs.push(q)}q=null};
+ const newSec=(L,rest)=>{closeQ();sec={name:"Section "+L.toUpperCase()+(rest?": "+cpTitle(rest):""),short:"Section "+L.toUpperCase(),qs:[],perQ:null,from:null,to:null};ex.sections.push(sec);inInstr=false;started=true;secMarks=null};
+ /* no SECTION headings at all: begin at the first question that is followed by an A. option */
+ const hasSec=T.some(t=>t.s!==undefined&&CP_SEC.test(t.s.trim()));
+ let startIdx=0;
+ if(!hasSec){for(let i=0;i<T.length;i++){const s=T[i].s;if(s===undefined)continue;const m=s.match(CP_Q);if(m&&+m[1]===1){const nx=T.slice(i+1,i+14).some(t=>t.s!==undefined&&CP_OPT.test(t.s)&&/^\s*(?:\*\*)?\(?A/i.test(t.s));if(nx){startIdx=i;break}}}
+  sec={name:"Questions",short:"Questions",qs:[],perQ:null};ex.sections.push(sec);started=true}
+ for(let i=0;i<T.length;i++){
+  const tk=T[i];
+  if(i<startIdx&&!hasSec){const p=tk.s===undefined?"":cpPlain(tk.s);
+   if(p&&!main)main=p;if(/duration\W+\d+/i.test(p))ex.durationMinutes=+p.match(/duration\W+(\d+)/i)[1];
+   if(/total\s*marks\W+\d+/i.test(p))declared=+p.match(/total\s*marks\W+(\d+(?:\.\d+)?)/i)[1];
+   if(/^topics?\W/i.test(p))ex.topic=p.replace(/^topics?\W+/i,"").trim();continue}
+  if(tk.code){
+   if(inKey){continue}
+   if(q&&q.opts.length){const o=q.opts[q.opts.length-1];o.code=(o.code||[]).concat(tk.code)}
+   else if(q)q.blocks.push({code:tk.code});
+   continue}
+  const raw1=tk.s,t=raw1.trim(),p=cpPlain(raw1);
+  if(inKey){keyLines.push(t);continue}
+  if(!t){if(q&&!q.opts.length)q.blocks.push({gap:1});continue}
+  if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){closeQ();continue}
+  if(CP_KEYHEAD.test(t)){closeQ();inKey=true;continue}
+  if(/^(\*\*)?\s*end of (the )?exam/i.test(t)||/^(\*\*)?\s*teacher'?s? note/i.test(t)){closeQ();started=started;continue}
+  const sm=t.match(CP_SEC);
+  if(sm){newSec(sm[1],sm[2]);continue}
+  /* front matter (before the first section) */
+  if(!sec){
+   if(/^#\s+/.test(t)&&!main){main=p;continue}
+   if(/^##\s+/.test(t)){sub=p;continue}
+   if(!main&&p&&!/^(duration|total marks|topics?|instructions)\b/i.test(p)){main=p;continue}
+   if(/duration\W+\d+/i.test(p)){ex.durationMinutes=+p.match(/duration\W+(\d+)/i)[1];continue}
+   if(/total\s*marks\W+\d+/i.test(p)){declared=+p.match(/total\s*marks\W+(\d+(?:\.\d+)?)/i)[1];continue}
+   if(/^topics?\W/i.test(p)){ex.topic=p.replace(/^topics?\W+/i,"").trim();continue}
+   if(/^instructions\b/i.test(p)){inInstr=true;continue}
+   if(inInstr&&p)instr.push(p.replace(/^\d+[.)]\s*/,""));
+   continue}
+  /* inside a section */
+  const mm=p.match(CP_MARKS);
+  if(mm&&!q){sec.from=+mm[1];sec.to=+mm[2];const c=sec.to-sec.from+1,pq=+mm[3]/c;if(c>0&&pq>0)sec.perQ=pq;continue}
+  const am=raw1.match(CP_ANS);
+  if(q&&am){q.inline=am[1].toUpperCase();continue}
+  const qm=raw1.match(CP_Q);
+  if(qm){const num=+qm[1],bold=/^\s*\*\*/.test(raw1);
+   const isQ=strict?bold:(num===expect);
+   if(isQ){closeQ();q={num,blocks:[],opts:[],inline:null,sec};expect=num+1;
+    if(qm[2].trim())q.blocks.push({s:qm[2].trim()});continue}}
+  if(q){
+   const om=raw1.match(CP_OPT);
+   const want=q.opts.length?String.fromCharCode(65+q.opts.length):"A";
+   if(om&&om[1].toUpperCase()===want){q.opts.push({s:[om[2].trim()].filter(Boolean),code:null,letter:want});continue}
+   if(q.opts.length){const o=q.opts[q.opts.length-1];if(t)o.s.push(t);continue}
+   q.blocks.push({s:t});continue}
+  /* text between the marks line and the first question is ignored */
+ }
+ closeQ();
+ /* ----- assemble ----- */
+ ex.title=cpTitle(main||"Computing examination")+(sub?" \u2013 "+cpTitle(sub):"");
+ const lv=(sub||main).match(/year\s*(\d+)\s*[–\-—to]+\s*(\d+)/i)||(sub||main).match(/year\s*(\d+)/i);
+ ex.level=lv?("Year "+lv[1]+(lv[2]?"\u2013"+lv[2]:"")):"";
+ if(!ex.durationMinutes)ex.durationMinutes=40;
+ if(instr.length&&ex.sections[0])ex.sections[0].instructions=instr.join(" ");
+ const key=Object.assign({},cpKey(keyLines.join("\n")),cpKey(keyTxt||""));
+ const missing=[],all=[];let total=0,total0=0;
+ const secOut=ex.sections.map(s=>{const out={name:s.name,short:s.short,instructions:s.instructions||"",questions:[]};
+  s.qs.forEach(q=>{
+   /* prompt */
+   const parts=[];let para=[];const flush=()=>{if(para.length){parts.push(para.map(cpInline).join("<br>"));para=[]}};
+   q.blocks.forEach(b=>{if(b.code){flush();parts.push('<pre class="code">'+cpEsc(b.code.join("\n").replace(/^\n+|\n+$/g,""))+"</pre>")}else if(b.gap){flush()}else para.push(b.s)});flush();
+   const prompt=parts.join('<div style="height:6px"></div>').replace(/<\/pre><div style="height:6px"><\/div>/g,"</pre>");
+   const opts=q.opts.map(o=>{let txt=o.s.map(cpPlain).join(" ").trim(),mark=false;
+    if(o.code&&o.code.length){const c=o.code.join("\n").replace(/^\n+|\n+$/g,"");txt=txt?txt+"\n"+c:c}
+    if(/(\u2713|\(correct\)|\[correct\])\s*$/i.test(txt)){mark=true;txt=txt.replace(/\s*(\u2713|\(correct\)|\[correct\])\s*$/i,"")}
+    return{txt,mark,letter:o.letter}});
+   opts.forEach((o,i)=>{if(o.mark&&!q.inline)q.inline=String.fromCharCode(65+i)});
+   const letter=key[q.num]||q.inline||null;
+   const marks=s.perQ||1;total0+=marks;
+   if(!prompt)errs.push("Question "+q.num+": the question text is empty.");
+   if(opts.length<2)errs.push("Question "+q.num+": needs at least 2 options (A, B, C ...).");
+   else if(opts.some(o=>!o.txt))errs.push("Question "+q.num+": an option is empty.");
+   let ai=-1;if(letter){ai=letter.charCodeAt(0)-65;if(ai<0||ai>=opts.length){errs.push("Question "+q.num+": the answer "+letter+" is not one of its options.");ai=-1}}
+   else missing.push(q.num);
+   out.questions.push({type:"mcq",marks,prompt,options:opts.map(o=>o.txt),answer:ai});all.push(q.num);total+=marks});
+  if(s.from!=null&&s.qs.length&&s.qs.length!==s.to-s.from+1)warns.push(s.name+": the text says questions "+s.from+"\u2013"+s.to+" but "+s.qs.length+" questions were found.");
+  return out});
+ ex.sections=secOut.filter(s=>s.questions.length);
+ secOut.filter(s=>!s.questions.length).forEach(s=>warns.push(s.name+" has no questions and was skipped."));
+ if(!all.length)errs.push("No questions were found. Questions must look like  1. Question text  followed by  A. option  B. option ...");
+ for(let i=1;i<all.length;i++)if(all[i]!==all[i-1]+1){warns.push("Question numbers jump from "+all[i-1]+" to "+all[i]+".");break}
+ if(missing.length)errs.push("No answer was given for "+(missing.length>12?missing.length+" questions (first: "+missing.slice(0,12).join(", ")+"...)":"question"+(missing.length>1?"s":"")+" "+missing.join(", "))+". Type the answers in the Answer key box, like:  1 B, 2 C, 3 A ... (or add a line  Answer: B  under each question).");
+ const unused=Object.keys(key).filter(n=>!all.includes(+n));if(unused.length&&all.length)warns.push("The answer key has answers for questions that do not exist: "+unused.slice(0,10).join(", ")+".");
+ if(declared!=null&&all.length&&Math.abs(declared-total)>1e-9)warns.push("The text says Total Marks: "+declared+" but the questions add up to "+total+".");
+ ex.id=cpSlug(ex.title)+"-"+cpHash(JSON.stringify(ex.sections));
+ return{ex,errs,warns,total}}
+
+
+/* ===================================================================
+   EXAM MAKER: Computing / Computer Science modes + exam VERSIONS
+   =================================================================== */
+const OK=typeof REMOTE!=="undefined"&&REMOTE;
+const MODES={comp:{name:"Computing",sub:"Year 7\u20139",years:()=>(SUBJECTS.find(s=>s.k==="computing")||{years:[7,8,9]}).years},
+ cs:{name:"Computer Science",sub:"Year 10 and above",years:()=>(SUBJECTS.find(s=>s.k==="cs")||{years:[10]}).years}};
+const LET=i=>{let s="";i=+i;do{s=String.fromCharCode(65+i%26)+s;i=Math.floor(i/26)-1}while(i>=0);return s};
+const sv=v=>esc(String(v==null?"":v));
+const SEP="\n\n<<<ANSWER-KEY>>>\n";
+const COMP_TEMPLATE=[
+"# COMPUTING EXAMINATION","","## YEAR 7\u20139: TOPIC NAME HERE","","**Duration:** 40 Minutes","**Total Marks:** 10","","**Topics:** Algorithms, Python basics","",
+"**Instructions**","","1. Answer all questions.","2. Choose the best answer.","","---","","## SECTION A: FIRST TOPIC","","**Questions 1\u20135: 5 marks**","",
+"**1.** What is an algorithm?","","A. A type of computer monitor","B. A step-by-step procedure for solving a problem","C. A programming language only","D. A computer virus","",
+"**2.** What will this code display?","","```python","print(\"Hello World\")","```","","A. `Hello World`","B. `print(\"Hello World\")`","C. `Hello` only","D. An error","",
+"**3.** Which code is correct?","","A.","","```python","name = \"Ali\"","print(name)","```","","B.","","```python","print(name)","name = \"Ali\"","```","","C. Neither","D. Both","",
+"(Add questions 4 and 5 in the same way.)","","---","","## SECTION B: SECOND TOPIC","","**Questions 6\u201310: 5 marks**","","**6.** ... question text ...","","A. option","B. option","C. option","D. option","",
+"---","","## ANSWER KEY","","1 B, 2 A, 3 A, 4 C, 5 D, 6 B, 7 A, 8 C, 9 D, 10 B","",
+"<!-- HOW TO USE THIS TEMPLATE:","- Keep the heading lines, the SECTION lines and the  **Questions 1-5: 5 marks**  lines (marks per question = section marks / number of questions).","- Questions are numbered 1, 2, 3 ... in order. Options are A. B. C. D.","- Code goes between ``` lines. An option can be a code block (see question 3).","- The ANSWER KEY can be here, OR typed in the Answer key box of the Exam Maker, OR written as a line  Answer: B  under a question.","- Word users: you can type the same layout in Word, save as .docx and choose the file. Code lines will then show as normal lines. -->"];
+/* ---- exam page: show multi-line options and code blocks ---- */
+const TPL_CSS=".qt pre.code,.optcode{margin:8px 0;padding:10px 12px;background:#0f2347;color:#e6edf7;border-radius:8px;font:13px/1.55 Consolas,'Courier New',monospace;white-space:pre-wrap;overflow:auto;font-weight:400;text-align:left}.optcode{margin:0;flex:1;min-width:0}.qt code{background:#e8eef7;color:#0f2347;padding:1px 6px;border-radius:4px;font:700 .92em Consolas,'Courier New',monospace}.opt{align-items:flex-start}.opt .L{flex:none}";
+const TPL_FN="function optH(x){x=String(x==null?'':x);return x.indexOf('\\n')>-1?'<pre class=\"optcode\">'+esc(x)+'</pre>':esc(x)}\n";
+function tplPatch(h){if(h.indexOf("function optH(")>-1)return h;
+ h=h.split("</span>${esc(x)}</label>").join("</span>${optH(x)}</label>");
+ h=h.replace("function field(q){",()=>TPL_FN+"function field(q){");
+ return h.replace("</style>",()=>TPL_CSS+"</style>")}
+{const _eh=examHtml;examHtml=function(){return tplPatch(_eh.apply(this,arguments))}}
+
+/* ---- parse by mode ---- */
+function parseExam(mode,text,key){
+ text=String(text||"").trim();if(!text)return{ex:null,errs:["Paste or choose the questions first."],warns:[]};
+ if(mode==="comp"){const r=parseComputing(text,key),e=r.errs.slice();if(!e.length)e.push(...MakerCore.validate(r.ex));return{ex:e.length?null:r.ex,errs:e,warns:r.warns||[]}}
+ let r;try{r=MakerCore.load(text)}catch(err){return{ex:null,errs:["Could not read the questions: "+err.message],warns:[]}}
+ const e=[...r.errs,...MakerCore.validate(r.ex)];return{ex:e.length?null:r.ex,errs:e,warns:[]}}
+const qCount=ex=>ex.sections.reduce((t,s)=>t+s.questions.length,0),mTotal=ex=>Math.round(ex.sections.reduce((t,s)=>t+s.questions.reduce((a,q)=>a+q.marks,0),0)*100)/100;
+
+/* build + store ONE version: answers go to exam_keys (private), the student page goes to exam_versions */
+async function saveVersion(par,vid,label,mode,text,key,status){
+ const r=parseExam(mode,text,key);if(!r.ex)throw new Error(r.errs[0]||"The questions are not valid.");
+ const ex=JSON.parse(JSON.stringify(r.ex)),letter=vid.split("-").pop();
+ ex.id=(ex.id||cpSlug(par.title))+"-"+letter.toLowerCase();ex.title=par.title+" \u2013 "+label;
+ const html=examHtml(ex,false),sp=splitExam(html,vid);if(!sp)throw new Error("Could not prepare this version.");
+ const H={Prefer:"resolution=merge-duplicates,return=minimal"};
+ const a=await sb("/rest/v1/exam_keys?on_conflict=aid",{method:"POST",body:JSON.stringify({aid:vid,data:sp.key}),headers:H});
+ if(!a.ok)throw new Error("Could not save the answers ("+a.status+").");
+ const b=await sb("/rest/v1/exam_versions?on_conflict=vid",{method:"POST",body:JSON.stringify({vid,parent:par.id,label,status,mode,src:text+(mode==="comp"&&key?SEP+key:""),body:sp.pub,qcount:qCount(ex),marks:mTotal(ex),updated:new Date().toISOString()}),headers:H});
+ if(!b.ok)throw new Error(b.status===404?"Run 5-exam-versions.sql in Supabase first.":"Could not save the version ("+b.status+").");
+ return{vid,label,q:qCount(ex),marks:mTotal(ex)}}
+const clearPreviewKey=html=>{try{const m=html.match(/<script id="exam-data" type="application\/json">([\s\S]*?)<\/script>/);if(m)localStorage.removeItem("exam_"+JSON.parse(m[1]).id)}catch(e){}};
+
+/* ===================== Exam Maker (replaces the old maker screen, same look) ===================== */
+const VM={mode:"cs",cur:0,v:[{label:"Version A",text:"",key:"",status:"available",ex:null,errs:[],warns:[]}],busy:false};
+const cv=()=>VM.v[VM.cur];
+const nextLabel=()=>{const used=new Set(VM.v.map(x=>x.label));for(let i=0;i<500;i++){const l="Version "+LET(i);if(!used.has(l))return l}return"Version "+(VM.v.length+1)};
+makerView=function(){
+ const vers=(db.a||[]).filter(a=>a.versioned);
+ return crumb([["Home","#/"],["Staff dashboard","#/staff"],["Exam maker"]])+`<div class="ph"><h1>EXAM MAKER</h1><div class="rule"></div><p>Turn your questions into an online exam, then publish it to a class. You can add several versions of the same exam.</p></div>
+<div class="panel"><h2>Make exam for</h2><div class="v-modes"><button type="button" class="v-mode" data-vmode="comp"><b>COMPUTING</b><span>Year 7\u20139</span></button><button type="button" class="v-mode" data-vmode="cs"><b>COMPUTER SCIENCE</b><span>Year 10 and above</span></button></div><p class="note" id="v-modenote"></p>
+${vers.length?`<div class="row"><select id="v-exist" style="max-width:340px"><option value="">Open the versions of an existing exam\u2026</option>${vers.map(a=>`<option value="${sv(a.id)}">Year ${sv(a.year)} \u00b7 ${sv(a.title)}</option>`).join("")}</select><button class="btn sm alt" id="v-open">Manage versions</button></div>`:""}</div>
+<div class="panel"><h2>1. Add your questions</h2><div class="v-tabs" id="v-tabs"></div><div id="v-edit"></div></div>
+<div class="panel" id="mres" hidden></div>`};
+const vTabs=()=>{$("#v-tabs").innerHTML=VM.v.map((x,i)=>`<button type="button" class="v-chip${i===VM.cur?" on":""}" data-vt="${i}">${sv(x.label)} <i>${x.ex?"\u2713":x.errs.length?"\u2717":"\u2026"}</i></button>`).join("")+`<button type="button" class="v-chip add" id="v-add"${OK?"":" disabled title=\"Versions need the online backend\""}>+ Add version</button>`;
+ $$("[data-vt]").forEach(b=>b.onclick=()=>{VM.cur=+b.dataset.vt;vDraw()});
+ const a=$("#v-add");if(a&&OK)a.onclick=()=>{VM.v.push({label:nextLabel(),text:"",key:"",status:"available",ex:null,errs:[],warns:[]});VM.cur=VM.v.length-1;vDraw()}};
+function vDraw(){
+ const m=VM.mode,x=cv();$$("[data-vmode]").forEach(b=>b.classList.toggle("on",b.dataset.vmode===m));
+ $("#v-modenote").textContent=m==="comp"?"Computing (Year 7\u20139): multiple-choice exam with sections, code blocks and an answer key.":"Computer Science (Year 10 and above): the Word template with all question types (multiple choice, fill in, order, sort, match, short answer, number conversion, binary addition).";
+ vTabs();
+ $("#v-edit").innerHTML=`<div class="two"><div><label for="v-label">Version name</label><input id="v-label" value="${sv(x.label)}" maxlength="40"></div>
+<div><label for="v-status">Students can get this version?</label><select id="v-status"><option value="available"${x.status==="available"?" selected":""}>Yes, available</option><option value="draft"${x.status==="draft"?" selected":""}>No, keep as a draft</option></select></div></div>
+<label for="v-file">${m==="comp"?"Word document (.docx), text or Markdown file":"Word document (.docx) or text file (.txt)"}</label><input id="v-file" type="file" accept="${m==="comp"?".docx,.txt,.md,.markdown":".docx,.txt,.json"}">
+<div class="row"><button class="btn sm alt" id="v-tpl">${m==="comp"?"Download the Computing template":"Download the Word template"}</button></div>
+<label for="v-text">Or paste the questions here</label><textarea id="v-text" rows="9" placeholder="${m==="comp"?"# COMPUTING EXAMINATION&#10;**Duration:** 40 Minutes&#10;## SECTION A: ...&#10;**1.** Question&#10;A. option  B. option ...":"Title: My Test&#10;Subject: Computer Science&#10;Time: 30 minutes&#10;Section: Section A&#10;TF: Binary uses 2 digits.&#10;Answer: True"}">${sv(x.text)}</textarea>
+${m==="comp"?`<label for="v-key">Answer key <span class="note" style="font-weight:400">(if the answers are not already in the text)</span></label><textarea id="v-key" rows="3" placeholder="1 B, 2 C, 3 A, 4 D ...">${sv(x.key)}</textarea>`:""}
+<div class="row"><button class="btn" id="v-check">Check questions</button>${VM.v.length>1?'<button class="btn alt danger" id="v-del">Remove this version</button>':""}</div><div id="v-res"></div>`;
+ vRes();
+ $("#v-label").oninput=e=>{x.label=e.target.value.trim()||x.label;vTabs()};
+ $("#v-status").onchange=e=>{x.status=e.target.value;vSummary()};
+ $("#v-text").oninput=e=>{x.text=e.target.value;x.ex=null};
+ if($("#v-key"))$("#v-key").oninput=e=>{x.key=e.target.value;x.ex=null};
+ $("#v-tpl").onclick=()=>m==="comp"?saveData("Computing_Exam_Template.md",new Blob([COMP_TEMPLATE.join("\n")],{type:"text/markdown"})):saveData("Exam_Question_Template.docx",new Blob([MakerCore.b64(DOCX_B64)],{type:MIME.docx}));
+ $("#v-file").onchange=async e=>{const f=e.target.files[0];if(!f)return;let t;
+  try{t=/\.docx$/i.test(f.name)?await MakerCore.docxText(await f.arrayBuffer()):await f.text()}catch(err){x.errs=[err.message];x.ex=null;vRes();vTabs();return}
+  x.text=t;$("#v-text").value=t;vCheck()};
+ $("#v-check").onclick=vCheck;
+ const d=$("#v-del");if(d)d.onclick=()=>{VM.v.splice(VM.cur,1);VM.cur=Math.max(0,VM.cur-1);vDraw()};
+ vSummary()}
+function vCheck(){const x=cv(),r=parseExam(VM.mode,x.text,x.key);x.ex=r.ex;x.errs=r.errs;x.warns=r.warns;vRes();vTabs();vSummary()}
+function vRes(){const x=cv(),b=$("#v-res");if(!b)return;
+ b.innerHTML=x.errs.length?`<div class="msg bad">${x.errs.map(e=>"<div>\u2022 "+sv(e)+"</div>").join("")}</div>`:x.ex?`<div class="msg good"><b>${sv(x.label)}</b> is valid: ${qCount(x.ex)} questions, ${mTotal(x.ex)} marks, ${sv(x.ex.durationMinutes)} minutes.</div>`:"";
+ if(x.warns&&x.warns.length)b.innerHTML+=`<div class="msg">${x.warns.map(e=>"<div>\u26a0 "+sv(e)+"</div>").join("")}</div>`}
+function vSummary(){
+ const box=$("#mres"),all=VM.v,ok=all.every(x=>x.ex),any=all.some(x=>x.ex);
+ if(!any){box.hidden=true;return}
+ const first=all.find(x=>x.ex).ex,multi=all.length>1,years=MODES[VM.mode].years(),prev=box.querySelector("#mkt")?{t:box.querySelector("#mkt").value,y:box.querySelector("#mky").value,c:box.querySelector("#mkc").value,d:box.querySelector("#mkd").value,l:box.querySelector("#mkl").value,s:box.querySelector("#mks").checked,k:box.querySelector("#mkcls").value}:null;
+ const avail=all.filter(x=>x.ex&&x.status==="available").length;
+ box.hidden=false;
+ box.innerHTML=`<h2>2. Check and publish</h2>${ok?"":`<div class="msg bad">Check every version first (a \u2717 on a version name means it still has problems). Remove versions you do not need.</div>`}
+<div class="tw"><table><tr><th>Version</th><th>Questions</th><th>Marks</th><th>Minutes</th><th>Students get it?</th></tr>${all.map(x=>`<tr><td>${sv(x.label)}</td><td>${x.ex?qCount(x.ex):"\u2013"}</td><td>${x.ex?mTotal(x.ex):"\u2013"}</td><td>${x.ex?sv(x.ex.durationMinutes):"\u2013"}</td><td>${x.status==="available"?"Yes":"Draft (no)"}</td></tr>`).join("")}</table></div>
+${multi?`<div class="msg">${avail} version${avail===1?"":"s"} will be given to students. Each student gets <b>one</b> version at random when they begin, and keeps it. Students cannot choose.</div>`:""}
+${multi&&!OK?'<div class="msg bad">Several versions need the online backend (Supabase).</div>':""}
+<div class="two"><div><label for="mky">Year / class</label><select id="mky">${years.map(y=>`<option value="${y}">Year ${y}</option>`).join("")}</select></div><div><label for="mkc">Assessment category</label><select id="mkc">${CATS.map(c=>`<option value="${c.k}">${c.n}</option>`).join("")}</select></div></div>
+<label for="mkt">Title shown to students</label><input id="mkt" value="${sv(first.title)}">
+<label for="mkd">Instructions (optional)</label><textarea id="mkd" rows="2"></textarea>
+<div class="two"><div><label for="mkl">Time limit in minutes</label><input id="mkl" type="number" min="0" max="300" value="${sv(first.durationMinutes||"")}"></div><div><label class="chk" for="mks" style="margin-top:34px"><input type="checkbox" id="mks" checked>Secure exam mode</label></div></div>
+<label for="mkcls">Class names students pick from (optional, one per line)</label><textarea id="mkcls" rows="2" placeholder="7Al Falaq&#10;7An Najm"></textarea>
+<div class="row"><button class="btn" id="mpub"${ok&&(!multi||(OK&&avail))?"":" disabled"}>${multi?"Publish exam with "+all.length+" versions":"Publish to portal"}</button><button class="btn alt" id="mprev"${cv().ex?"":" disabled"}>Preview ${multi?sv(cv().label):"exam"}</button><button class="btn alt" id="msv"${cv().ex?"":" disabled"}>Save HTML file</button></div><div id="mmsg"></div><div id="mpv"></div>`;
+ if(prev){$("#mkt").value=prev.t;$("#mky").value=prev.y;$("#mkc").value=prev.c;$("#mkd").value=prev.d;$("#mkl").value=prev.l;$("#mks").checked=prev.s;$("#mkcls").value=prev.k}
+ $("#mpub").onclick=vPublish;$("#mprev").onclick=vPreview;
+ $("#msv").onclick=()=>{try{const ex=exFinal2(cv().ex);saveData((ex.id||"exam")+".html",new Blob([examHtml(ex,true)],{type:"text/html"}))}catch(e){mkMsg("Could not build the exam: "+e.message,1)}}}
+function exFinal2(base){const ex=JSON.parse(JSON.stringify(base)),c=($("#mkcls")?$("#mkcls").value:"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);if(c.length)ex.classes=c;return ex}
+function vPreview(){const x=cv();if(!x.ex)return;const pv=$("#mpv");
+ if(pv.firstChild){pv.innerHTML="";$("#mprev").textContent="Preview "+(VM.v.length>1?x.label:"exam");return}
+ const e2=exFinal2(x.ex);e2.id=(e2.id||"exam")+"-preview";try{localStorage.removeItem("exam_"+e2.id)}catch(e){}
+ pv.innerHTML='<iframe class="viewer" id="mkfr" title="Exam preview" sandbox="allow-scripts allow-forms allow-modals allow-same-origin"></iframe><p class="note">Preview only. Answers given here are not counted.</p>';
+ try{$("#mkfr").srcdoc=examHtml(e2,true)}catch(e){pv.innerHTML="";mkMsg("Could not build the exam: "+e.message,1);return}
+ $("#mprev").textContent="Close preview"}
+async function vPublish(){
+ const title=$("#mkt").value.trim();if(!title){mkMsg("Add a title first.",1);return}
+ const all=VM.v;if(!all.every(x=>x.ex)){mkMsg("Check every version first.",1);return}
+ const labels=all.map(x=>x.label.toLowerCase());if(new Set(labels).size!==labels.length){mkMsg("Two versions have the same name. Give each version its own name.",1);return}
+ const base={date:new Date().toISOString().slice(0,10),year:+$("#mky").value,cat:$("#mkc").value,title,desc:$("#mkd").value.trim(),secure:$("#mks").checked,limit:Math.max(0,+$("#mkl").value||0)};
+ const btn=$("#mpub");btn.disabled=true;
+ if(all.length===1){
+  let html;try{html=examHtml(exFinal2(all[0].ex),false)}catch(e){mkMsg("Could not build the exam: "+e.message,1);btn.disabled=false;return}
+  const rec={...base,id:"a"+Date.now().toString(36),url:textToData(html),file:(all[0].ex.id||"exam")+".html",kind:"html"};
+  db=API.load();db.a=[...db.a,rec];
+  if(!API.save(db)){mkMsg("Not saved. Browser storage is full.",1);btn.disabled=false;return}
+  btn.textContent="Published";mkMsg(`Published to Year ${rec.year}, ${esc(catOf(rec.cat).n)}. <a href="#/class/${rec.year}/${rec.cat}" style="text-decoration:underline">Open that page</a>`,0);return}
+ /* several versions: save every version first, publish the exam last (so students never see a half-finished exam) */
+ const pid="a"+Date.now().toString(36),par={...base,id:pid},done=[];
+ try{for(let i=0;i<all.length;i++){const x=all[i];btn.textContent="Saving "+(i+1)+"/"+all.length+"\u2026";
+   const ex2=exFinal2(x.ex);const t=x.text;
+   done.push(await saveVersion(par,pid+"-"+LET(i),x.label,VM.mode,t,x.key,x.status))}}
+ catch(e){for(const d of done){await sb("/rest/v1/exam_versions?vid=eq."+enc(d.vid),{method:"DELETE"});await sb("/rest/v1/exam_keys?aid=eq."+enc(d.vid),{method:"DELETE"})}
+  mkMsg("Nothing was published. "+e.message,1);btn.disabled=false;btn.textContent="Publish exam with "+all.length+" versions";return}
+ const rec={...par,url:textToData("<!doctype html><title>"+esc(title)+"</title><p>This exam has several versions.</p>"),file:"versions.html",kind:"html",versioned:true};
+ db=API.load();db.a=[...db.a,rec];API.save(db);try{await _q}catch(e){}
+ btn.textContent="Published";
+ mkMsg(`Published to Year ${rec.year}, ${esc(catOf(rec.cat).n)} with ${done.length} versions. <a href="#/class/${rec.year}/${rec.cat}" style="text-decoration:underline">Open that page</a>`,0)}
+bindMaker=function(){
+ $$("[data-vmode]").forEach(b=>b.onclick=()=>{VM.mode=b.dataset.vmode;VM.v.forEach(x=>{x.ex=null;x.errs=[];x.warns=[]});vDraw()});
+ const o=$("#v-open");if(o)o.onclick=()=>{const id=$("#v-exist").value;if(id)vmOpen(id)};
+ vDraw()};
+
+/* ===================== Manage versions of an existing exam ===================== */
+const SUBS={available:"Available",draft:"Draft",retired:"Retired"};
+async function vmOpen(pid){
+ const par=(db.a||[]).find(a=>a.id===pid);if(!par){toast("Exam not found.");return}
+ const o=mgModal('<h2>Versions</h2><p class="note">Loading\u2026</p>');o.firstChild.style.maxWidth="980px";
+ const body=()=>o.firstChild;
+ const draw=async()=>{
+  const st=await rpc("version_stats",{p_parent:pid});
+  if(!st.ok){body().innerHTML='<h2>Versions</h2><div class="msg bad">Could not load the versions. Run 5-exam-versions.sql in Supabase, then log in again.</div><div class="row"><button class="btn alt" id="vm-x">Close</button></div>';body().querySelector("#vm-x").onclick=()=>o.remove();return}
+  const L=st.j||[];
+  body().innerHTML=`<h2>${sv(par.title)}</h2><p class="note">Year ${sv(par.year)}. Students get one version at random and keep it. A version that students already received or answered is locked: you can still hide it from new students (Draft), but its questions and answers cannot change.</p>
+<div class="tw"><table><tr><th>Version</th><th>Questions</th><th>Marks</th><th>Status</th><th>Given to</th><th>Results</th><th></th></tr>${L.map(v=>{const lock=v.assigned>0||v.results>0;
+   return `<tr><td><b>${sv(v.label)}</b></td><td>${sv(v.qcount)}</td><td>${sv(v.marks)}</td><td><span class="tag ${v.status==="available"?"ok":""}">${SUBS[v.status]||sv(v.status)}</span></td><td>${v.assigned} student${v.assigned===1?"":"s"}</td><td>${v.results}</td>
+<td style="white-space:nowrap"><button class="btn sm alt" data-vp="${sv(v.vid)}">Preview</button> <button class="btn sm alt" data-ve="${sv(v.vid)}"${lock?" disabled title=\"Locked: students already used this version\"":""}>Edit</button> <button class="btn sm alt" data-vs="${sv(v.vid)}" data-to="${v.status==="available"?"draft":"available"}">${v.status==="available"?"Make draft":"Make available"}</button> <button class="btn sm danger" data-vd="${sv(v.vid)}"${lock?" disabled title=\"Locked: students already used this version\"":""}>Delete</button></td></tr>`}).join("")||'<tr><td colspan="7">No versions yet.</td></tr>'}</table></div>
+<div class="row"><button class="btn" id="vm-add">+ Add a version</button><button class="btn alt" id="vm-x">Close</button></div>`;
+  const B=body();
+  B.querySelector("#vm-x").onclick=()=>o.remove();
+  B.querySelector("#vm-add").onclick=()=>vmEditor(par,null,L,draw);
+  B.querySelectorAll("[data-vp]").forEach(b=>b.onclick=async()=>{const r=await rows("exam_versions","vid=eq."+enc(b.dataset.vp)+"&select=body,label");if(!r.ok||!r.j||!r.j[0]){toast("Could not load.");return}
+   clearPreviewKey(r.j[0].body);const p=mgModal(`<h2>${sv(r.j[0].label)} (preview)</h2><iframe class="viewer" id="vm-fr" sandbox="allow-scripts allow-forms allow-modals allow-same-origin"></iframe><div class="row"><button class="btn alt" id="vm-px">Close preview</button></div>`);
+   p.firstChild.style.maxWidth="1000px";p.querySelector("#vm-fr").srcdoc=injectLogo(r.j[0].body);p.querySelector("#vm-px").onclick=()=>p.remove()});
+  B.querySelectorAll("[data-ve]").forEach(b=>b.onclick=()=>vmEditor(par,L.find(v=>v.vid===b.dataset.ve),L,draw));
+  B.querySelectorAll("[data-vs]").forEach(b=>b.onclick=async()=>{const r=await sb("/rest/v1/exam_versions?vid=eq."+enc(b.dataset.vs),{method:"PATCH",body:JSON.stringify({status:b.dataset.to,updated:new Date().toISOString()}),headers:{Prefer:"return=minimal"}});toast(r.ok?"Saved.":"Could not save.");draw()});
+  B.querySelectorAll("[data-vd]").forEach(b=>b.onclick=async()=>{const v=L.find(z=>z.vid===b.dataset.vd);if(!v||v.assigned>0||v.results>0)return;
+   if(!await confirmBox(`<b>Warning:</b> delete <b>${sv(v.label)}</b> and its answers permanently? No student has used it yet. This cannot be undone.`,""))return;
+   await sb("/rest/v1/exam_versions?vid=eq."+enc(v.vid),{method:"DELETE"});await sb("/rest/v1/exam_keys?aid=eq."+enc(v.vid),{method:"DELETE"});toast("Deleted.");draw()})};
+ draw()}
+async function vmEditor(par,ex,L,done){
+ let mode=ex?ex.mode:(L[0]&&L[0].mode)||"cs",src="",key="",label=ex?ex.label:"",status=ex?ex.status:"available",vid=ex?ex.vid:null;
+ if(ex){const r=await rows("exam_versions","vid=eq."+enc(ex.vid)+"&select=src");const s=(r.ok&&r.j&&r.j[0]&&r.j[0].src)||"";const i=s.indexOf(SEP);src=i>-1?s.slice(0,i):s;key=i>-1?s.slice(i+SEP.length):""}
+ else{const used=new Set(L.map(v=>v.label));for(let i=0;i<500;i++){const l="Version "+LET(i);if(!used.has(l)){label=l;break}}
+  const letters=new Set(L.map(v=>v.vid.split("-").pop()));for(let i=0;i<500;i++){if(!letters.has(LET(i))){vid=par.id+"-"+LET(i);break}}}
+ const o=mgModal(`<h2>${ex?"Edit":"Add"} ${sv(label)}</h2>
+<div class="two"><div><label for="ve-l">Version name</label><input id="ve-l" value="${sv(label)}"></div><div><label for="ve-m">Exam type</label><select id="ve-m"${ex?" disabled":""}><option value="comp"${mode==="comp"?" selected":""}>Computing (Year 7\u20139)</option><option value="cs"${mode==="cs"?" selected":""}>Computer Science (Year 10+)</option></select></div></div>
+<label for="ve-f">Word, text or Markdown file (optional)</label><input id="ve-f" type="file" accept=".docx,.txt,.md,.json"><label for="ve-t">Questions</label><textarea id="ve-t" rows="9">${sv(src)}</textarea>
+<div id="ve-kw"><label for="ve-k">Answer key (Computing)</label><textarea id="ve-k" rows="2" placeholder="1 B, 2 C, 3 A ...">${sv(key)}</textarea></div>
+<label for="ve-s">Students can get this version?</label><select id="ve-s"><option value="available"${status==="available"?" selected":""}>Yes, available</option><option value="draft"${status!=="available"?" selected":""}>No, keep as a draft</option></select>
+<div id="ve-e"></div><div class="row"><button class="btn" id="ve-ok">Check and save</button><button class="btn alt" id="ve-no">Cancel</button></div>`);
+ o.firstChild.style.maxWidth="820px";const q=s=>o.querySelector(s);
+ const kw=()=>{q("#ve-kw").hidden=q("#ve-m").value!=="comp"};kw();q("#ve-m").onchange=kw;
+ q("#ve-no").onclick=()=>o.remove();
+ q("#ve-f").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{q("#ve-t").value=/\.docx$/i.test(f.name)?await MakerCore.docxText(await f.arrayBuffer()):await f.text()}catch(err){q("#ve-e").innerHTML='<div class="msg bad">'+sv(err.message)+"</div>"}};
+ q("#ve-ok").onclick=async()=>{const lb=q("#ve-l").value.trim(),m=q("#ve-m").value,t=q("#ve-t").value,k=q("#ve-k").value,s=q("#ve-s").value,bad=x=>{q("#ve-e").innerHTML='<div class="msg bad">'+x+"</div>"};
+  if(!lb)return bad("Give the version a name.");
+  if(L.some(v=>v.label.toLowerCase()===lb.toLowerCase()&&v.vid!==vid))return bad("Another version already has this name.");
+  const r=parseExam(m,t,k);if(!r.ex)return bad(r.errs.map(e=>"\u2022 "+sv(e)).join("<br>"));
+  const b=q("#ve-ok");b.disabled=true;
+  try{await saveVersion(par,vid,lb,m,t,k,s);o.remove();toast("Version saved.");done()}catch(e){b.disabled=false;bad(sv(e.message))}}}
+
+/* "Versions" button on versioned exams in the dashboard list */
+const _bdV=bindDash;
+bindDash=function(){_bdV.apply(this,arguments);
+ try{document.querySelectorAll('[data-t="assessments"] [data-d]').forEach(b=>{const a=(db.a||[]).find(x=>x.id===b.dataset.d);if(a&&a.versioned&&!b.parentNode.querySelector("[data-vm]")){
+   const v=document.createElement("button");v.className="btn sm alt";v.dataset.vm=a.id;v.textContent="Versions";v.onclick=()=>vmOpen(a.id);const e=b.parentNode.querySelector("[data-e]");(e||b).before(v);b.parentNode.insertBefore(document.createTextNode(" "),e||b)}})}catch(e){}};
+
+/* ===================== Students: the SERVER gives each student one version ===================== */
+const VERR={student:"Your name is not on the class list for this exam. Tell your teacher.",ambiguous:"Your name matches more than one student. Tell your teacher.",noversion:"This exam is not ready yet: no version is available. Tell your teacher.",password:"The class password is needed. Go back and enter it.",notfound:"This exam was not found. Tell your teacher.",version_missing:"Your version of this exam is missing. Tell your teacher."};
+{const _be=beginExam;
+ beginExam=async function(a,name){
+  if(a&&a.versioned){
+   if(isStaff()){const e=$("#exe");if(e)e.innerHTML='<div class="msg">This exam has several versions. Staff can preview each version in Exam maker \u2192 Manage versions.</div>';return}
+   const r=await rpc("assign_version",{p_parent:a.id,p_name:name,p_pw:ss_get("ca_pwh_"+a.year)||"",p_cls:window.__stuCls||null});
+   if(!(r.ok&&r.j&&r.j.ok)){const e=$("#exe");const m=r.status===404?"Versions are not set up yet. Tell your teacher.":(r.j&&VERR[r.j.err])||"Could not start the exam. Check your internet and try again.";if(e)e.innerHTML='<div class="msg bad">'+m+"</div>";else toast(m);return}
+   if(r.j.versioned!==false&&r.j.body)a.url=textToData(r.j.body)}
+  return _be.apply(this,arguments)}}
+
+})();
+</script>
+<!--VER-ADDON-END-->
 </body></html>
