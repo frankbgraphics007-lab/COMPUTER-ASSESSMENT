@@ -2457,4 +2457,263 @@ mgDraw=function(){
 </script>
 
 <!--VER-ADDON-END-->
+<!--REP-ADDON-START v1-->
+<style id="rep-style">
+.ca-t td.ca-none{color:var(--mut)}.ca-t .ca-foot td{background:var(--field);border-top:2px solid var(--gold)}
+.rp-yrs{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:6px 0 4px}
+.rp-b{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 8px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;box-shadow:0 6px 16px -8px rgba(11,26,58,.35);transition:transform .2s,box-shadow .25s,border-color .2s,background .2s,color .2s}
+.rp-b b{font:700 1rem var(--sans);letter-spacing:.05em}.rp-b span{font-size:.8rem;color:var(--mut)}.rp-b:hover{transform:translateY(-2px);border-color:var(--gold)}
+.rp-b.on{background:linear-gradient(180deg,#14307a,#0b1a3a);border-color:var(--gold);color:var(--goldl)}.rp-b.on span{color:#c9d3ee}
+.nlist{margin-top:8px;border:1px solid var(--line);border-radius:12px;background:var(--card);max-height:280px;overflow:auto;box-shadow:0 14px 30px -16px rgba(11,26,58,.45)}
+.nl-h{padding:9px 14px;font-size:.82rem;color:var(--mut);border-bottom:1px solid var(--line)}
+.ni{display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;padding:11px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);font:600 .98rem var(--sans);text-align:left;cursor:pointer}.ni:hover{background:rgba(184,146,58,.16)}
+.rpt h2{font-size:2rem}.rpt-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:4px solid var(--gold);padding-bottom:10px}
+.rpt-k{font-size:.78rem;letter-spacing:.12em;color:var(--mut);font-weight:700}.rpt-s{color:var(--mut)}
+.rpt-g{text-align:center;min-width:92px}.rpt-g b{display:block;font:700 3rem/1 var(--serif);color:var(--royal)}.rpt-g span{font-size:.75rem;color:var(--mut)}
+.rpt h3{font-size:1.35rem;margin:20px 0 6px}
+.rpt-b{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.rpt-bd{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;border:1px solid var(--gold);background:rgba(184,146,58,.1);font-weight:600;font-size:.88rem}.rpt-bd i{font-style:normal}
+.pbar2{display:inline-block;width:80px;height:9px;background:var(--line);border-radius:9px;overflow:hidden;vertical-align:middle}.pbar2 i{display:block;height:100%;border-radius:9px;animation:prGrow .9s both}
+.rpt-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:640px){.rpt-2{grid-template-columns:1fr}}
+.rpt-t{display:flex;justify-content:space-between;gap:10px;border-left:4px solid var(--ok);background:var(--good-bg);padding:8px 12px;margin:6px 0;border-radius:6px}.rpt-t.bad{border-color:var(--bad);background:var(--bad-bg)}
+.rpt-n{margin:6px 0;padding-left:20px;display:grid;gap:6px}.rpt-c{border-left:4px solid var(--gold);background:rgba(184,146,58,.1);padding:12px 14px;border-radius:8px;font-size:1.02rem}
+@keyframes prGrow{from{width:0}}
+@media print{.dtabs,header,footer,nav,.btn{display:none!important}}
+</style>
+<script id="rep-addon">
+(function(){
+if(window.__REP)return;window.__REP=1;
+const OKR=typeof REMOTE!=="undefined"&&REMOTE;
+const nm=s=>String(s||"").toUpperCase().replace(/\s+/g," ").trim();
+const sv=v=>esc(String(v==null?"":v));
+const nat=(a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true});
+const normTag=s=>String(s||"").toUpperCase().replace(/\s+/g,"").slice(0,14);
+const gr=p=>p>=75?"A":p>=60?"B":p>=50?"C":p>=40?"D":"F";
+const subjectOf=y=>+y<=9?"Computing":"Computer Science";
+const avgOf=a=>a.length?Math.round(a.reduce((t,v)=>t+v,0)/a.length):null;
+const col=p=>p>=75?"#1d7a4d":p>=60?"#4c9a2a":p>=50?"#c79a1e":p>=40?"#d9722b":"#c0392b";
+const fmtDate=d=>d?new Date(d).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"";
+
+/* ============ 1. END EXAM = SUBMIT WHAT THE STUDENT HAS ============ */
+{const _rel=release;
+ release=function(why){
+  if(!EX||EX.released)return;
+  if(why==="teacher"||why==="time"){
+   if(!EX.endingAt){
+    let started=false;try{started=!!$("#exfr").contentWindow.eval("typeof active==='function'?active():false")}catch(e){}
+    if(started){EX.endingAt=Date.now();
+     try{$("#exfr").contentWindow.submitExam(false)}catch(e){}
+     exToast(why==="teacher"?"Your teacher ended the exam. Your answers are being submitted\u2026":"Time is up. Your answers are being submitted\u2026");
+     return}}
+   else if(Date.now()-EX.endingAt<150000)return}      /* waiting for the server; exTick releases as "submitted" when it is saved */
+  return _rel(why)}}
+{const _mm=mgModal;mgModal=function(h){return _mm.call(this,typeof h==="string"?h.replace("The student's exam stops and they are taken out of the exam screen.","The student's current answers are submitted and marked automatically, then the exam closes."):h)}}
+
+/* ============ 2. ASSESSMENT TAGS (ASS1, ASS2 ...) ============ */
+let PEND=null;
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("#fs,#mpub");if(!b)return;
+ const el=b.id==="fs"?$("#ftag"):$("#mktag");if(!el)return;
+ PEND={tag:normTag(el.value),id:b.id==="fs"?(typeof editId!=="undefined"?editId:null):null,at:Date.now()}},true);
+{const _s=API.save.bind(API);
+ API.save=function(d){
+  if(PEND&&Date.now()-PEND.at<8000){const old=(typeof _snap!=="undefined"?_snap.a:[]).map(a=>a.id);
+   (d.a||[]).forEach(a=>{const mine=PEND.id?a.id===PEND.id:(!old.includes(a.id)&&!("tag" in a));if(mine&&(PEND.tag||PEND.id))a.tag=PEND.tag});PEND=null}
+  return _s(d)}}
+const TAGL='<datalist id="tagl"><option value="ASS1"><option value="ASS2"><option value="ASS3"><option value="ASS4"><option value="ASS5"><option value="ASS6"></datalist>';
+const tagField=(id,val)=>`<label for="${id}">Assessment tag (for the Continuous Assessment file)</label><input id="${id}" list="tagl" maxlength="14" placeholder="ASS1" value="${sv(val)}"><p class="note" style="margin-top:4px">Use the same tag for the same assessment in every class, for example ASS1, ASS2, ASS3. Results are arranged by this tag.</p>${TAGL}`;
+{const _bd=bindDash;
+ bindDash=function(){_bd.apply(this,arguments);
+  try{const ft=$("#ft");if(ft&&!$("#ftag")){const cur=(db.a||[]).find(a=>a.id===editId)||{};ft.insertAdjacentHTML("afterend",tagField("ftag",cur.tag||""))}
+   document.querySelectorAll('[data-t="assessments"] [data-d]').forEach(b=>{const a=(db.a||[]).find(x=>x.id===b.dataset.d);if(!a||b.parentNode.querySelector("[data-tg]"))return;
+    const tr=b.closest("tr"),c=tr&&tr.querySelector("td:not(:first-child)");const t=document.createElement("button");t.className="btn sm alt";t.dataset.tg=a.id;t.textContent=a.tag?"Tag: "+a.tag:"Set tag";
+    t.onclick=()=>{const o=mgModal(`<h2>Assessment tag</h2><p class="note">${sv(a.title)}</p>${tagField("tgi",a.tag||"")}<div class="row"><button class="btn" id="tgs">Save</button><button class="btn alt" id="tgc">Cancel</button></div>`);
+     o.querySelector("#tgc").onclick=()=>o.remove();o.querySelector("#tgs").onclick=()=>{const v=normTag(o.querySelector("#tgi").value);o.remove();db.a=db.a.map(x=>x.id===a.id?{...x,tag:v}:x);persist("Tag saved: "+(v||"none")+".")}};
+    b.parentNode.insertBefore(t,b.parentNode.firstChild);b.parentNode.insertBefore(document.createTextNode(" "),t.nextSibling)})}catch(e){}}}
+new MutationObserver(()=>{const m=$("#mkt");if(m&&!$("#mktag"))m.insertAdjacentHTML("afterend",tagField("mktag",""))}).observe(document.body,{childList:true,subtree:true});
+
+/* ============ 3. CONTINUOUS ASSESSMENT (CA) FILE ============ */
+const CA={year:0,cls:"",mode:"pct",untag:false,risk:false,q:"",data:null,loading:false};
+const _mv=manageView;
+manageView=function(){return _mv.apply(this,arguments).replace(/<button class="btn sm( alt)?" data-mt="diag">/,'<button class="btn sm'+(MG.tab==="ca"?"":" alt")+'" data-mt="ca">CA file</button><button class="btn sm$1" data-mt="diag">')};
+{const _ms=mgShow;mgShow=async function(){if(MG.tab==="ca"){$$("[data-mt]").forEach(b=>b.classList.toggle("alt",b.dataset.mt!=="ca"));return caUI()}return _ms.apply(this,arguments)}}
+async function caFetch(year){
+ const [R,Ro,Cm,Op]=await Promise.all([
+  fetchAll("results_tagged","select=id,exam_id,tag,exam_title,cls,name,roster_id,total,max_marks,pct,grade,secs,submitted_at&year=eq."+year+"&order=submitted_at"),
+  fetchAll("roster","select=id,name,cls,adm,sex&year=eq."+year+"&active=eq.true&order=cls,name"),
+  fetchAll("student_comments","select=roster_id,comment,updated&year=eq."+year),
+  rows("settings","key=eq.reports_open&select=value")]);
+ if(!R)throw new Error("Could not read the results. Run 6-progress-reports.sql in Supabase, then log in again.");
+ return{R,Ro:Ro||[],Cm:Cm||[],open:!!(Op.ok&&Op.j&&Op.j[0]&&Op.j[0].value===true)}}
+function caBuild(d){
+ const byId={},byName={};d.Ro.forEach(r=>{byId[r.id]=r;byName[nm(r.name)]=r});
+ const cells={},cols=new Set(),utitle={};
+ d.R.forEach(x=>{const ro=(x.roster_id&&byId[x.roster_id])||byName[nm(x.name)];if(!ro)return;
+  const k=x.tag||("T:"+x.exam_title);if(!x.tag)utitle[k]=x.exam_title;cols.add(k);
+  const c=cells[ro.id]=cells[ro.id]||{};if(!c[k]||c[k].submitted_at<x.submitted_at)c[k]=x});
+ const tags=[...cols].filter(k=>!k.startsWith("T:")).sort(nat),un=[...cols].filter(k=>k.startsWith("T:")).sort(nat);
+ const cm={};d.Cm.forEach(c=>cm[c.roster_id]=c.comment);
+ return{byId,cells,tags,un,utitle,cm}}
+function caRows(d,B){
+ const C=CA.untag?[...B.tags,...B.un]:B.tags,q=CA.q.trim().toUpperCase();
+ return d.Ro.filter(r=>(!CA.cls||r.cls===CA.cls)&&(!q||nm(r.name).includes(q))).map(r=>{
+  const c=B.cells[r.id]||{},vals=C.map(k=>c[k]?+c[k].pct:null),got=vals.filter(v=>v!=null),avg=avgOf(got),miss=C.length-got.length;
+  return{r,c,C,avg,miss,done:got.length,grade:avg==null?"":gr(avg),comment:B.cm[r.id]||""}}).filter(x=>!CA.risk||(x.avg!=null&&x.avg<50)||x.miss>=2)}
+async function caUI(){
+ const box=$("#mgbody");
+ const years=[...SUBJECTS.flatMap(s=>s.years)];if(!CA.year)CA.year=years[0];
+ if(!CA.data||CA.data.year!==CA.year){
+  box.innerHTML='<p class="note"><span class="spin"></span> Loading the Continuous Assessment file\u2026</p>';
+  try{const d=await caFetch(CA.year);d.year=CA.year;CA.data=d}catch(e){box.innerHTML='<div class="msg bad">'+sv(e.message)+"</div>";return}}
+ caDraw()}
+function caDraw(){
+ const box=$("#mgbody"),d=CA.data,B=caBuild(d),rowsOut=caRows(d,B),C=CA.untag?[...B.tags,...B.un]:B.tags,years=[...SUBJECTS.flatMap(s=>s.years)];
+ const classes=[...new Set(d.Ro.map(r=>r.cls))].sort(nat);
+ const head=k=>k.startsWith("T:")?sv(B.utitle[k]):sv(k);
+ const cell=(x,k)=>{const v=x.c[k];if(!v)return'<td class="ca-none">\u2013</td>';const p=+v.pct;return`<td style="color:${col(p)};font-weight:700" title="${sv(v.exam_title)}">${CA.mode==="pct"?p+"%":sv(v.total)+"/"+sv(v.max_marks)}</td>`};
+ const foot=C.map(k=>{const ps=d.Ro.filter(r=>(!CA.cls||r.cls===CA.cls)).map(r=>(B.cells[r.id]||{})[k]).filter(Boolean).map(v=>+v.pct);return`<td><b>${ps.length?avgOf(ps)+"%":"\u2013"}</b><br><span class="note" style="margin:0">${ps.length} done</span></td>`}).join("");
+ box.innerHTML=`<p class="note">Results arranged by assessment tag (ASS1, ASS2 ...). A tag is set when you upload or publish an exam, or with the <b>Set tag</b> button in the assessments list.</p>
+<div class="row" style="flex-wrap:wrap;gap:8px"><select id="ca-y">${years.map(y=>`<option value="${y}"${CA.year===y?" selected":""}>Year ${y} \u00b7 ${subjectOf(y)}</option>`).join("")}</select>
+<select id="ca-c"><option value="">All classes</option>${classes.map(c=>`<option${CA.cls===c?" selected":""}>${sv(c)}</option>`).join("")}</select>
+<select id="ca-m"><option value="pct"${CA.mode==="pct"?" selected":""}>Show percent</option><option value="marks"${CA.mode==="marks"?" selected":""}>Show marks</option></select>
+<input id="ca-q" placeholder="Search a student\u2026" value="${sv(CA.q)}" style="max-width:220px"></div>
+<div class="row" style="flex-wrap:wrap;gap:12px"><label class="chk" style="margin:0"><input type="checkbox" id="ca-u"${CA.untag?" checked":""}>Include exams without a tag</label><label class="chk" style="margin:0"><input type="checkbox" id="ca-r"${CA.risk?" checked":""}>Only students who need support</label></div>
+<div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn sm" id="ca-csv">Download for Excel (CSV)</button><button class="btn sm alt" id="ca-pr">Print / save as PDF</button>
+<button class="btn sm ${d.open?"":"alt"}" id="ca-open">Student reports: ${d.open?"ON":"OFF"}</button></div>
+<p class="note">${d.open?"Students can open their own report from the front page (name + class password).":"Students cannot see their reports yet. Switch this ON when you are ready."}</p>
+${C.length?"":'<div class="msg">No tagged results yet for this year. Give your exams a tag (ASS1, ASS2 ...).</div>'}
+<div class="tw"><table class="ca-t"><tr><th>#</th><th>Student</th><th>Class</th>${C.map(k=>`<th>${head(k)}</th>`).join("")}<th>Average</th><th>Grade</th><th>Done</th><th>Comment</th></tr>
+${rowsOut.map((x,i)=>`<tr><td>${i+1}</td><td><a href="#" data-ca-p="${x.r.id}" style="color:var(--link);font-weight:600">${sv(x.r.name)}</a></td><td>${sv(x.r.cls)}</td>${C.map(k=>cell(x,k)).join("")}<td style="font-weight:700;color:${x.avg==null?"inherit":col(x.avg)}">${x.avg==null?"\u2013":x.avg+"%"}</td><td>${sv(x.grade)}</td><td>${x.done}/${C.length}</td><td><button class="btn sm alt" data-ca-c="${x.r.id}">${x.comment?"Edit":"Add"}</button>${x.comment?` <span class="note" title="${sv(x.comment)}">\u2713</span>`:""}</td></tr>`).join("")||`<tr><td colspan="${C.length+7}">No students.</td></tr>`}
+${rowsOut.length?`<tr class="ca-foot"><td></td><td><b>Class average</b></td><td></td>${foot}<td><b>${avgOf(rowsOut.filter(x=>x.avg!=null).map(x=>x.avg))??"\u2013"}${rowsOut.some(x=>x.avg!=null)?"%":""}</b></td><td></td><td></td><td></td></tr>`:""}</table></div>`;
+ $("#ca-y").onchange=e=>{CA.year=+e.target.value;CA.cls="";CA.data=null;caUI()};
+ $("#ca-c").onchange=e=>{CA.cls=e.target.value;caDraw()};$("#ca-m").onchange=e=>{CA.mode=e.target.value;caDraw()};
+ $("#ca-u").onchange=e=>{CA.untag=e.target.checked;caDraw()};$("#ca-r").onchange=e=>{CA.risk=e.target.checked;caDraw()};
+ let tm;$("#ca-q").oninput=e=>{clearTimeout(tm);tm=setTimeout(()=>{CA.q=e.target.value;caDraw();const z=$("#ca-q");z.focus();z.setSelectionRange(z.value.length,z.value.length)},300)};
+ $("#ca-csv").onclick=()=>caCsv(d,B,rowsOut,C);$("#ca-pr").onclick=()=>caPrint(d,B,rowsOut,C);
+ $("#ca-open").onclick=async()=>{const nv=!d.open;const r=await sb("/rest/v1/settings?on_conflict=key",{method:"POST",body:JSON.stringify({key:"reports_open",value:nv}),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});if(r.ok){d.open=nv;caDraw()}else toast("Could not change this.")};
+ $$("[data-ca-c]").forEach(b=>b.onclick=()=>commentEditor(+b.dataset.caC,B,d));
+ $$("[data-ca-p]").forEach(a=>a.onclick=e=>{e.preventDefault();staffProfile(+a.dataset.caP,d,B)})}
+function caCsv(d,B,rowsOut,C){const q=v=>'"'+String(v==null?"":v).replace(/"/g,'""')+'"',h=k=>k.startsWith("T:")?B.utitle[k]:k;
+ const head=["No","Student","Class","Adm no",...C.flatMap(k=>[h(k)+" marks",h(k)+" %"]),"Average %","Grade","Assessments done","Teacher comment"];
+ const lines=[head.map(q).join(","),...rowsOut.map((x,i)=>[i+1,x.r.name,x.r.cls,x.r.adm||"",...C.flatMap(k=>{const v=x.c[k];return v?[v.total+"/"+v.max_marks,v.pct]:["",""]}),x.avg==null?"":x.avg,x.grade,x.done+"/"+C.length,x.comment].map(q).join(","))];
+ saveData("CA_file_Year"+CA.year+(CA.cls?"_"+CA.cls.replace(/\W+/g,"_"):"")+".csv",new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv;charset=utf-8"}))}
+function printHtml(inner,title){const f=document.createElement("iframe");f.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0";document.body.appendChild(f);
+ f.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><title>${sv(title)}</title><style>body{font:12px/1.4 system-ui,sans-serif;color:#16213b;margin:18px}h1{font-size:18px;margin:0 0 4px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:4px 6px;text-align:left}th{background:#0b1a3a;color:#fff}.n{color:#666}@page{size:landscape;margin:10mm}</style></head><body>${inner}</body></html>`;
+ f.onload=()=>{try{f.contentWindow.focus();f.contentWindow.print()}catch(e){toast("Printing is not available here.")}setTimeout(()=>f.remove(),60000)}}
+function caPrint(d,B,rowsOut,C){const h=k=>k.startsWith("T:")?B.utitle[k]:k;
+ printHtml(`<h1>Continuous Assessment file \u2013 Year ${CA.year} ${subjectOf(CA.year)}${CA.cls?" \u2013 "+sv(CA.cls):""}</h1><p class="n">${new Date().toLocaleDateString("en-GB")}</p><table><tr><th>#</th><th>Student</th><th>Class</th>${C.map(k=>`<th>${sv(h(k))}</th>`).join("")}<th>Average</th><th>Grade</th><th>Teacher comment</th></tr>${rowsOut.map((x,i)=>`<tr><td>${i+1}</td><td>${sv(x.r.name)}</td><td>${sv(x.r.cls)}</td>${C.map(k=>{const v=x.c[k];return`<td>${v?(CA.mode==="pct"?v.pct+"%":v.total+"/"+v.max_marks):"\u2013"}</td>`}).join("")}<td><b>${x.avg==null?"\u2013":x.avg+"%"}</b></td><td>${sv(x.grade)}</td><td>${sv(x.comment)}</td></tr>`).join("")}</table>`,"CA file")}
+
+/* ---- teacher comment ---- */
+const PHRASES=["Excellent work. Keep it up.","Good progress. Keep practising.","Satisfactory. More revision is needed on weak topics.","Needs to improve. Please revise regularly and ask for help.","Has missed assessments. Please complete them as soon as possible.","Very good effort and a positive attitude to learning."];
+function suggestComment(items,todo){const a=avgOf(items.map(i=>+i.pct));if(a==null)return"No assessment has been completed yet. Please sit the assessments.";
+ const w=weakTopics(items)[0],last=items[items.length-1],first=items[0];
+ let t=a>=75?"Excellent performance. ":a>=60?"Good progress. ":a>=50?"Satisfactory work, but there is room to improve. ":"Needs to improve and should revise regularly. ";
+ if(items.length>1&&last.pct-first.pct>=10)t+="Clear improvement across the assessments. ";
+ if(w&&w.pct<60)t+="Please revise "+w.name.replace(/^Section [A-Z0-9]+:\s*/i,"")+". ";
+ if(todo&&todo.length)t+="Complete the missing assessment"+(todo.length>1?"s":"")+" ("+todo.slice(0,3).map(x=>x.tag||x.title).join(", ")+"). ";
+ return t.trim()}
+function commentEditor(rid,B,d,after){
+ const r=B.byId[rid],cur=B.cm[rid]||"",lr=localReport(r,d);
+ const o=mgModal(`<h2>Teacher's comment</h2><p class="note">${sv(r.name)} \u00b7 ${sv(r.cls)}</p><label for="cm-p">Quick comment</label><select id="cm-p"><option value="">Choose a ready comment\u2026</option>${PHRASES.map(p=>`<option>${sv(p)}</option>`).join("")}</select>
+<label for="cm-t">Comment (the student sees this in the progress report)</label><textarea id="cm-t" rows="5" maxlength="600">${sv(cur)}</textarea>
+<div class="row"><button class="btn sm alt" id="cm-s">Suggest from the results</button></div><div class="row"><button class="btn" id="cm-ok">Save comment</button><button class="btn alt" id="cm-no">Cancel</button></div>`);
+ const q=s=>o.querySelector(s);q("#cm-no").onclick=()=>o.remove();
+ q("#cm-p").onchange=e=>{if(e.target.value)q("#cm-t").value=e.target.value};
+ q("#cm-s").onclick=()=>{q("#cm-t").value=suggestComment(lr.items,lr.todo)};
+ q("#cm-ok").onclick=async()=>{const t=q("#cm-t").value.trim().slice(0,600);
+  const res=t?await sb("/rest/v1/student_comments?on_conflict=roster_id",{method:"POST",body:JSON.stringify({roster_id:rid,year:r.year||CA.year,comment:t,by_email:(typeof staffEmail==="function"?staffEmail():null)||null,updated:new Date().toISOString()}),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}})
+   :await sb("/rest/v1/student_comments?roster_id=eq."+rid,{method:"DELETE"});
+  if(!res.ok){toast("Could not save. Run 6-progress-reports.sql first.");return}
+  if(t)B.cm[rid]=t;else delete B.cm[rid];const i=d.Cm.findIndex(c=>c.roster_id===rid);if(i>-1)d.Cm.splice(i,1);if(t)d.Cm.push({roster_id:rid,comment:t});
+  o.remove();toast("Comment saved.");if(after)after();else caDraw()}}
+
+/* ============ 4. THE PROGRESS REPORT (student page + staff profile) ============ */
+function weakTopics(items){const m={};items.forEach(i=>(Array.isArray(i.secs)?i.secs:[]).forEach(s=>{const k=s[0],o=m[k]=m[k]||{name:k,got:0,max:0};o.got+=+s[1]||0;o.max+=+s[2]||0}));
+ return Object.values(m).filter(o=>o.max>0).map(o=>({name:o.name,pct:Math.round(o.got/o.max*100)})).sort((a,b)=>a.pct-b.pct)}
+function localReport(r,d){
+ const B=caBuild(d),items=[],byEx={};
+ d.R.filter(x=>x.roster_id===r.id||(!x.roster_id&&nm(x.name)===nm(r.name))).forEach(x=>{const o=byEx[x.exam_id];if(!o||o.submitted_at<x.submitted_at)byEx[x.exam_id]=x});
+ Object.values(byEx).sort((a,b)=>a.submitted_at<b.submitted_at?-1:1).forEach(x=>{const cl=d.R.filter(y=>y.exam_id===x.exam_id&&nm(y.cls)===nm(r.cls)),ca=avgOf(cl.map(y=>+y.pct));
+  items.push({exam_id:x.exam_id,tag:x.tag,title:x.exam_title,pct:x.pct,total:x.total,max_marks:x.max_marks,grade:x.grade,secs:x.secs,sub:x.submitted_at,class_avg:ca,class_n:cl.length})});
+ const todo=(db.a||[]).filter(a=>+a.year===+r.year&&a.kind==="html"&&!byEx[a.id]).map(a=>({id:a.id,title:a.title,tag:normTag(a.tag),cat:a.cat}));
+ return{ok:true,student:{name:r.name,cls:r.cls,year:r.year||CA.year},subject:subjectOf(r.year||CA.year),items,todo,comment:B.cm[r.id]||""}}
+function chartSvg(items){
+ const n=items.length;if(!n)return"";const W=640,H=230,L=40,R=16,T=16,Bm=44,w=W-L-R,h=H-T-Bm;
+ const x=i=>L+(n===1?w/2:i*w/(n-1)),y=p=>T+h-(Math.max(0,Math.min(100,p))/100)*h;
+ const line=pts=>pts.map((p,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(p).toFixed(1)).join(" ");
+ const grid=[0,25,50,75,100].map(g=>`<line x1="${L}" x2="${W-R}" y1="${y(g)}" y2="${y(g)}" stroke="#d6dbe6" stroke-dasharray="${g===50?"0":"3 4"}"/><text x="${L-6}" y="${y(g)+4}" font-size="11" text-anchor="end" fill="#6b7590">${g}</text>`).join("");
+ const ca=items.map(i=>i.class_avg).map(v=>v==null?null:v),caPts=ca.every(v=>v!=null)?`<path d="${line(ca)}" fill="none" stroke="#b8923a" stroke-width="2" stroke-dasharray="6 5"/>`:"";
+ const dots=items.map((i,k)=>`<circle cx="${x(k)}" cy="${y(i.pct)}" r="5.5" fill="${col(+i.pct)}" stroke="#fff" stroke-width="2"/><text x="${x(k)}" y="${y(i.pct)-11}" font-size="11" font-weight="700" text-anchor="middle" fill="#16213b">${i.pct}%</text><text x="${x(k)}" y="${H-Bm+18}" font-size="11" text-anchor="middle" fill="#16213b">${sv(i.tag||("#"+(k+1)))}</text>`).join("");
+ return`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-width:720px" role="img" aria-label="Progress chart">${grid}${caPts}<path d="${line(items.map(i=>+i.pct))}" fill="none" stroke="#1d3f8f" stroke-width="3" stroke-linejoin="round"/>${dots}</svg><p class="note" style="margin:2px 0 0"><span style="color:#1d3f8f">\u25cf</span> You &nbsp; <span style="color:#b8923a">\u25cf</span> Class average (dashed)</p>`}
+function reportHtml(d,staff){
+ const it=d.items||[],todo=d.todo||[],avg=avgOf(it.map(i=>+i.pct)),best=it.length?Math.max(...it.map(i=>+i.pct)):null,last=it[it.length-1];
+ const wt=weakTopics(it),strong=wt.filter(t=>t.pct>=75).slice(-3).reverse(),weak=wt.filter(t=>t.pct<60).slice(0,3);
+ const trend=it.length>1?(+last.pct>+it[it.length-2].pct+3?"\u25b2 Going up":+last.pct<+it[it.length-2].pct-3?"\u25bc Going down":"\u25ac Steady"):"\u2013";
+ const badges=[];
+ if(it.length&&!todo.length)badges.push(["\u2705","All assessments done"]);
+ if(it.length>1&&+last.pct-+it[0].pct>=10)badges.push(["\ud83d\udcc8","Improving"]);
+ const vs=it.filter(i=>i.class_avg!=null&&i.class_n>=3).map(i=>+i.pct-i.class_avg);if(vs.length&&avgOf(vs)>0)badges.push(["\u2b50","Above the class average"]);
+ if(best!=null&&best>=90)badges.push(["\ud83c\udfc6","Scored 90% or more"]);
+ if(it.length>=3&&it.every(i=>+i.pct>=50))badges.push(["\ud83d\udd25","Passed every assessment"]);
+ const need=it.length&&avg<75?Math.round(75*(it.length+1)-it.reduce((t,i)=>t+ +i.pct,0)):null;
+ return`<div class="rpt"><div class="rpt-h"><div><div class="rpt-k">PROGRESS REPORT \u00b7 ${sv(d.subject.toUpperCase())}</div><h2>${sv(d.student.name)}</h2><div class="rpt-s">${sv(d.student.cls)} \u00b7 Year ${sv(d.student.year)}${d.student.adm?" \u00b7 Adm. "+sv(d.student.adm):""}</div></div><div class="rpt-g"><b>${avg==null?"\u2013":gr(avg)}</b><span>Overall grade</span></div></div>
+<div class="tiles"><div class="tile"><b>${it.length}</b><span>Assessments done</span></div><div class="tile"><b>${avg==null?"\u2013":avg+"%"}</b><span>Average</span></div><div class="tile"><b>${best==null?"\u2013":best+"%"}</b><span>Best result</span></div><div class="tile"><b style="font-size:1.2rem">${trend}</b><span>Latest trend</span></div></div>
+${badges.length?`<div class="rpt-b">${badges.map(b=>`<span class="rpt-bd"><i>${b[0]}</i>${sv(b[1])}</span>`).join("")}</div>`:""}
+${it.length?`<h3>Your progress</h3>${chartSvg(it)}`:'<div class="msg">No assessment has been marked for you yet.</div>'}
+${it.length?`<h3>Your results</h3><div class="tw"><table><tr><th>Tag</th><th>Assessment</th><th>Date</th><th>Marks</th><th>%</th><th>Grade</th><th>Class avg</th></tr>${it.map(i=>{const dv=i.class_avg==null?"":(+i.pct-i.class_avg);return`<tr><td><b>${sv(i.tag||"\u2013")}</b></td><td>${sv(i.title)}</td><td>${fmtDate(i.sub)}</td><td>${sv(i.total)}/${sv(i.max_marks)}</td><td><div class="pbar2"><i style="width:${i.pct}%;background:${col(+i.pct)}"></i></div> <b>${i.pct}%</b></td><td>${sv(i.grade)}</td><td>${i.class_avg==null?"\u2013":i.class_avg+"%"} ${dv===""?"":`<span style="color:${dv>=0?"#1d7a4d":"#c0392b"}">${dv>=0?"\u25b2":"\u25bc"}${Math.abs(dv)}</span>`}</td></tr>`}).join("")}</table></div>`:""}
+${(strong.length||weak.length)?`<div class="rpt-2"><div><h3>Your strong topics</h3>${strong.length?strong.map(t=>`<div class="rpt-t ok"><b>${sv(t.name)}</b><span>${t.pct}%</span></div>`).join(""):'<p class="note">Keep working. Strong topics will appear here.</p>'}</div><div><h3>Topics to revise</h3>${weak.length?weak.map(t=>`<div class="rpt-t bad"><b>${sv(t.name)}</b><span>${t.pct}%</span></div>`).join(""):'<p class="note">No weak topic. Well done.</p>'}</div></div>`:""}
+${(need!=null||todo.length||weak.length)?`<h3>Your next steps</h3><ul class="rpt-n">${need!=null&&need<=100?`<li>To reach an average of <b>75% (grade A)</b>, aim for about <b>${Math.max(0,need)}%</b> in your next assessment.</li>`:need!=null?`<li>Reaching an average of 75% will take your next two or three assessments. Keep improving step by step.</li>`:""}${weak.map(t=>`<li>Revise <b>${sv(t.name.replace(/^Section [A-Z0-9]+:\s*/i,""))}</b> and ask your teacher for extra practice.</li>`).join("")}${todo.length?`<li>You have not done: <b>${todo.slice(0,6).map(x=>sv(x.tag||x.title)).join(", ")}</b>. Ask your teacher when you can sit ${todo.length>1?"them":"it"}.</li>`:""}</ul>`:""}
+<h3>Teacher's comment</h3><div class="rpt-c">${d.comment?sv(d.comment).replace(/\n/g,"<br>"):'<span class="note">Your teacher has not written a comment yet.</span>'}</div>
+<p class="note">Report date: ${new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}</p></div>`}
+function staffProfile(rid,d,B){
+ const r=B.byId[rid],lr=localReport(r,d);
+ const o=mgModal(`<div class="row" style="margin:0 0 8px"><button class="btn sm" id="pf-c">${lr.comment?"Edit comment":"Add comment"}</button><button class="btn sm alt" id="pf-p">Print / save as PDF</button><button class="btn sm alt" id="pf-x">Close</button></div><div id="pf-b">${reportHtml(lr,true)}</div>`);
+ o.firstChild.style.maxWidth="860px";o.style.alignItems="flex-start";const q=s=>o.querySelector(s);
+ q("#pf-x").onclick=()=>o.remove();q("#pf-p").onclick=()=>printHtml(reportCss()+q("#pf-b").innerHTML,r.name);
+ q("#pf-c").onclick=()=>commentEditor(rid,B,d,()=>{o.remove();caDraw();staffProfile(rid,d,caBuild(d))})}
+const reportCss=()=>`<style>.rpt{max-width:760px}.rpt-h{display:flex;justify-content:space-between;gap:12px;border-bottom:4px solid #b8923a;padding-bottom:8px}.rpt-k{font-size:11px;letter-spacing:.1em;color:#6b7590}.rpt h2{margin:2px 0;font-size:24px}.rpt-g{text-align:center}.rpt-g b{font-size:34px;display:block;color:#1d3f8f}.tiles{display:flex;gap:10px;margin:10px 0}.tile{flex:1;border-left:4px solid #b8923a;background:#f3f5fa;padding:6px 10px;display:flex;flex-direction:column}.tile b{font-size:20px}.tile span{font-size:11px;color:#6b7590}.rpt-bd{display:inline-block;margin:2px 4px 2px 0;padding:2px 10px;border-radius:99px;border:1px solid #b8923a;font-size:12px}.rpt-bd i{font-style:normal;margin-right:4px}.pbar2{display:inline-block;width:70px;height:8px;background:#e1e5ee;border-radius:9px;overflow:hidden;vertical-align:middle}.pbar2 i{display:block;height:100%}.rpt-2{display:flex;gap:14px}.rpt-2>div{flex:1}.rpt-t{display:flex;justify-content:space-between;border-left:4px solid #1d7a4d;background:#eef7f1;padding:4px 8px;margin:4px 0}.rpt-t.bad{border-color:#c0392b;background:#fbeeee}.rpt-c{border-left:4px solid #b8923a;background:#fbf7ec;padding:10px 12px;border-radius:6px}.note{font-size:11px;color:#6b7590}h3{margin:14px 0 4px}</style>`;
+
+/* ---- student page: #/report ---- */
+const RP={year:0,wing:"",name:"",cls:""};
+function reportPage(){
+ const ys=SUBJECTS.flatMap(s=>s.years.map(y=>[y,s.n]));
+ return crumb([["Home","#/"],["My progress report"]])+`<div class="ph"><h1>MY PROGRESS REPORT</h1><div class="rule"></div><p>See all your results, your progress, topics to revise and your teacher's comment.</p></div>
+<div class="panel gate"><label>1. Choose your year</label><div class="rp-yrs">${ys.map(([y,n])=>`<button type="button" class="rp-b${RP.year===y?" on":""}" data-ry="${y}"><b>Year ${y}</b><span>${sv(n)}</span></button>`).join("")}</div>
+<label>2. Choose your wing</label><div class="rp-yrs"><button type="button" class="rp-b${RP.wing==="Boys"?" on":""}" data-rw="Boys"><b>BOYS</b></button><button type="button" class="rp-b${RP.wing==="Girls"?" on":""}" data-rw="Girls"><b>GIRLS</b></button></div>
+<label for="rp-n">3. Type the first letters of your name, then tap your name</label><input id="rp-n" value="${sv(RP.name)}" autocomplete="off" placeholder="Choose your year and wing first"><div id="rp-l" class="nlist" hidden></div>
+<div id="rp-pw"></div><div id="rp-e"></div><div class="row"><button class="btn" id="rp-go">Show my report</button><a class="btn alt" href="#/">Back</a></div></div><div id="rp-out"></div>`}
+function bindReportPage(){
+ const inp=$("#rp-n"),box=$("#rp-l");let seq=0,tm;
+ const pwBox=()=>{$("#rp-pw").innerHTML=RP.year&&db.pw[RP.year]?`<label for="rp-p">4. Class password (from your teacher)</label><input id="rp-p" type="password" autocomplete="off">`:""};
+ const draw=async()=>{const v=inp.value.trim(),my=++seq;if(!RP.year||!RP.wing||!v){box.hidden=true;return}
+  let r=await rpc("list_students",{p_year:RP.year,p_wing:RP.wing,p_prefix:v});let list=r.ok&&Array.isArray(r.j)?r.j:null;
+  if(!list){const f=await rpc("find_students",{p_q:v,p_year:RP.year});list=f.ok&&Array.isArray(f.j)?f.j:[]}
+  if(my!==seq)return;box.hidden=false;
+  box.innerHTML=list.length?`<div class="nl-h">${list.length} name${list.length>1?"s":""} found</div>`+list.map(x=>`<button type="button" class="ni" data-n="${sv(x.name)}" data-c="${sv(x.cls)}"><span>${sv(x.name)}</span><span class="tag">${sv(x.cls)}</span></button>`).join(""):'<div class="nl-h">No name found. Check the year, the wing and the first letters.</div>'};
+ const unlock=()=>{inp.disabled=!(RP.year&&RP.wing);inp.placeholder=inp.disabled?"Choose your year and wing first":"Type the first letters of your name"};unlock();pwBox();
+ $$("[data-ry]").forEach(b=>b.onclick=()=>{RP.year=+b.dataset.ry;RP.name="";RP.cls="";$$("[data-ry]").forEach(x=>x.classList.toggle("on",x===b));inp.value="";unlock();pwBox();draw()});
+ $$("[data-rw]").forEach(b=>b.onclick=()=>{RP.wing=b.dataset.rw;RP.name="";RP.cls="";$$("[data-rw]").forEach(x=>x.classList.toggle("on",x===b));inp.value="";unlock();draw();inp.focus()});
+ inp.addEventListener("input",()=>{RP.name=inp.value;RP.cls="";clearTimeout(tm);tm=setTimeout(draw,150)});
+ box.addEventListener("click",e=>{const b=e.target.closest("[data-n]");if(!b)return;inp.value=b.dataset.n;RP.name=b.dataset.n;RP.cls=b.dataset.c;box.hidden=true});
+ $("#rp-go").onclick=async()=>{const bad=m=>{$("#rp-e").innerHTML='<div class="msg bad">'+m+"</div>"},n=inp.value.trim();$("#rp-e").innerHTML="";
+  if(!RP.year||!RP.wing||!n)return bad("Choose your year, your wing and your name.");
+  if(db.pw[RP.year]){const p=$("#rp-p")?$("#rp-p").value:"";if(!await gateOk(RP.year,p))return bad("The class password is not correct.")}
+  const btn=$("#rp-go");btn.disabled=true;btn.textContent="Loading\u2026";
+  const r=await rpc("student_report",{p_name:n,p_year:RP.year,p_pw:ss_get("ca_pwh_"+RP.year)||"",p_cls:RP.cls||null});btn.disabled=false;btn.textContent="Show my report";
+  const M={closed:"Reports are not open yet. Your teacher will open them soon.",password:"The class password is not correct.",student:"Your name is not on the class list for this year. Pick it from the list.",ambiguous:"Your name matches more than one student. Tell your teacher."};
+  if(!(r.ok&&r.j&&r.j.ok))return bad(r.status===404?"Reports are not set up yet. Tell your teacher.":(r.j&&M[r.j.err])||"Could not load your report. Check your internet.");
+  const out=$("#rp-out");out.innerHTML=`<div class="panel" id="rp-card">${reportHtml(r.j,false)}<div class="row"><button class="btn" id="rp-print">Print / save as PDF</button></div></div>`;
+  $("#rp-print").onclick=()=>printHtml(reportCss()+$("#rp-card .rpt").outerHTML,n);out.scrollIntoView({behavior:"smooth"})}}
+{const _route=route;
+ route=function(){
+  if(/^#\/report/.test(location.hash)&&!(typeof EX!=="undefined"&&EX&&!EX.released)){
+   if(!(isStaff()===false&&typeof pendingExam==="function"&&pendingExam())){
+    db=API.load();app.innerHTML=reportPage();bindReportPage();$$("nav a").forEach(a=>a.classList.toggle("on",a.dataset.k==="report"));$("#nav").classList.remove("open");return}}
+  return _route.apply(this,arguments)}}
+{const _home=home;home=function(){let h=_home.apply(this,arguments);
+  h=h.replace('<a class="btn ghost" href="#/staff">STAFF LOGIN</a>','<a class="btn ghost" href="#/report">MY REPORT</a><a class="btn ghost" href="#/staff">STAFF LOGIN</a>');
+  const i=h.lastIndexOf("</div>");return h.slice(0,i)+'<a class="card" href="#/report"><h3>MY PROGRESS REPORT</h3><p>Your results, progress and teacher\'s comment</p></a>'+h.slice(i)}}
+(()=>{const n=$("#nav");if(n&&!n.querySelector('[data-k="report"]')){const a=document.createElement("a");a.href="#/report";a.dataset.k="report";a.textContent="MY REPORT";const st=n.querySelector('[data-k="staff"]');n.insertBefore(a,st||null)}})();
+
+})();
+</script>
+<!--REP-ADDON-END-->
 </body></html>
