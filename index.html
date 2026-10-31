@@ -2716,4 +2716,182 @@ function bindReportPage(){
 })();
 </script>
 <!--REP-ADDON-END-->
+<!--ROOM-ADDON-START v1-->
+<style id="room-style">
+/* Live exam room */
+.seat-wrap{margin:6px 0 10px}
+.seat-legend{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:2px 0 8px;font-size:.84rem;font-weight:600}
+.sl{display:inline-flex;align-items:center;gap:6px}.sl i{width:12px;height:12px;border-radius:4px;display:inline-block;background:var(--ok)}
+.sl.s-help i{background:var(--bad)}.sl.s-paused i{background:#d9a21a}.sl.s-done i{background:#2f6fd0}.sl.s-ended i{background:#7b8499}.sl.s-off i{background:repeating-linear-gradient(45deg,#d9722b 0 3px,#fff 3px 6px)}
+.seat-help{margin:4px 0 8px;padding:8px 10px;border:1px solid var(--bad-line);background:var(--bad-bg);border-radius:10px;font-weight:700;color:var(--bad-ink)}
+.seat-hb{margin:2px 4px;padding:3px 10px;border-radius:999px;border:1px solid var(--bad);background:var(--card);color:var(--bad);font:700 .85rem var(--sans);cursor:pointer}
+.seat-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+@media(max-width:1180px){.seat-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}@media(max-width:860px){.seat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:520px){.seat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.seat{position:relative;display:flex;align-items:center;gap:6px;min-height:46px;padding:5px 8px 5px 7px;border-radius:9px;border:1px solid var(--line);border-left-width:5px;background:var(--card);color:var(--ink);text-align:left;cursor:pointer;box-shadow:0 1px 3px rgba(11,26,58,.1);transition:transform .15s,box-shadow .2s,background .2s}
+.seat:hover{transform:translateY(-2px);box-shadow:0 8px 16px -8px rgba(11,26,58,.45)}
+.seat .dot{display:none}.seat .sn{flex:1;min-width:0;font:600 .72rem/1.15 var(--sans);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
+.seat .sb{font-style:normal;font-size:.72rem;font-weight:700;flex:none}.seat .sb.w{color:var(--bad)}
+.seat.s-active{border-left-color:var(--ok);background:linear-gradient(90deg,rgba(29,122,77,.12),transparent)}
+.seat.s-paused{border-left-color:#d9a21a;background:linear-gradient(90deg,rgba(217,162,26,.2),transparent)}
+.seat.s-done{border-left-color:#2f6fd0;background:linear-gradient(90deg,rgba(47,111,208,.14),transparent)}
+.seat.s-ended{border-left-color:#7b8499;background:linear-gradient(90deg,rgba(123,132,153,.18),transparent)}
+.seat.s-help{border-left-color:var(--bad);background:var(--bad-bg);animation:seatHelp 1.4s ease-in-out infinite}
+@keyframes seatHelp{50%{box-shadow:0 0 0 3px rgba(168,50,45,.35)}}
+.seat.off{outline:2px dashed #d9722b;outline-offset:-3px}
+.seat.on{outline:3px solid var(--gold);outline-offset:1px;box-shadow:0 10px 22px -10px rgba(184,146,58,.7)}
+.seat-detail{margin:6px 0 10px;padding:10px 12px;border:2px solid var(--gold);border-radius:12px;background:var(--card);box-shadow:0 14px 30px -16px rgba(11,26,58,.5)}
+.seat-detail .lv{margin-top:8px}.seat-dh{display:flex;justify-content:space-between;align-items:center}.seat-act{margin:8px 0 2px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+/* requests */
+.rq{margin:8px 0 12px;padding:12px 14px;border:2px solid var(--gold);border-radius:12px;background:rgba(184,146,58,.08)}.rq h3{font-size:1.2rem;margin:0 0 8px}
+.rq-r{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line)}.rq-r:first-of-type{border-top:0}
+.rq-b{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.rq-b select{width:auto}
+.rescue{margin-top:14px}
+</style>
+<script id="room-addon">
+(function(){
+if(window.__ROOM)return;window.__ROOM=1;
+const OKR=typeof REMOTE!=="undefined"&&REMOTE;
+const nm=s=>String(s||"").toUpperCase().replace(/\s+/g," ").trim();
+const sv=v=>esc(String(v==null?"":v));
+const ago=t=>{const s=Math.round((Date.now()-new Date(t).getTime())/1000);return s<60?s+"s":s<3600?Math.round(s/60)+" min":Math.round(s/3600)+" h"};
+
+/* ============ 1. NEVER LOAD FOR EVER: time limits + a rescue panel ============ */
+{const _sb=sb;sb=function(path,opt,retry){const big=opt&&opt.body&&String(opt.body).length>200000;
+  return Promise.race([_sb.call(this,path,opt,retry),new Promise(r=>setTimeout(()=>r({ok:false,status:0,j:null,timeout:true}),big?90000:25000))])}}
+setInterval(()=>{const e=document.querySelector("#app>.empty");
+ if(e&&/^\s*Loading/.test(e.textContent)){e.__t=e.__t||Date.now();
+  if(Date.now()-e.__t>12000&&!e.querySelector(".rescue"))e.insertAdjacentHTML("beforeend",'<div class="rescue"><p>This is taking too long.</p><button class="btn sm" id="rs-r">Try again</button> <button class="btn sm alt" id="rs-f">Fix this device</button><p class="note">"Fix this device" clears the exam saved on this device. Use it only if "Try again" does not help. Your teacher can then let you continue or start again.</p></div>');
+  const r=e.querySelector("#rs-r");if(r&&!r.__b){r.__b=1;r.onclick=()=>location.reload();e.querySelector("#rs-f").onclick=()=>{if(!confirm("Clear the exam saved on this device and reload?"))return;
+   try{Object.keys(localStorage).filter(k=>/^(ca_sess_|exam_|ca_name|ca_outbox)/.test(k)).forEach(k=>localStorage.removeItem(k));sessionStorage.clear()}catch(x){}location.reload()}}}},2000);
+
+/* ============ 2. LIVE EXAM ROOM: students as seats, 8 in a row, A to Z ============ */
+let SEAT=null;
+const ST=["help","paused","active","done","ended"];
+function seatify(){
+ const box=$("#live");if(!box)return;
+ const cards=[...box.children].filter(c=>c.classList&&c.classList.contains("lv")&&!c.classList.contains("all")&&c.querySelector(".lv-h strong"));
+ if(!cards.length){return}
+ const sidOf=c=>{const x=c.querySelector("[data-sid]")||c.querySelector("[data-lsel]")||c.querySelector("[data-ldel]");return x?(x.dataset.sid||x.dataset.lsel||x.dataset.ldel):c.querySelector(".lv-h strong").textContent};
+ const info=cards.map(c=>{const name=c.querySelector(".lv-h strong").textContent.trim(),st=[...c.classList].find(x=>ST.includes(x))||"active",tags=[...c.querySelectorAll(".lv-h .tag.bad")].map(t=>t.textContent);
+  const w=tags.map(t=>t.match(/(\d+)\s+warning/)).filter(Boolean).map(m=>+m[1])[0]||0;
+  const sid=sidOf(c);c.dataset.seatSid=sid;return{c,name,st,sid,w,off:tags.some(t=>/No signal/.test(t)),chk:!!(c.querySelector("[data-lsel]")&&c.querySelector("[data-lsel]").checked)}});
+ info.sort((a,b)=>a.name.localeCompare(b.name));
+ const cnt=k=>info.filter(i=>i.st===k).length,off=info.filter(i=>i.off&&i.st!=="done"&&i.st!=="ended").length;
+ const store=document.createElement("div");store.className="seat-store";store.hidden=true;
+ const wrap=document.createElement("div");wrap.className="seat-wrap";
+ wrap.innerHTML=`<div class="seat-legend"><span class="sl s-active"><i></i>In exam ${cnt("active")}</span><span class="sl s-help"><i></i>Help ${cnt("help")}</span><span class="sl s-paused"><i></i>Paused ${cnt("paused")}</span><span class="sl s-done"><i></i>Submitted ${cnt("done")}</span><span class="sl s-ended"><i></i>Ended ${cnt("ended")}</span>${off?`<span class="sl s-off"><i></i>No signal ${off}</span>`:""}<span class="note" style="margin:0 0 0 auto">${info.length} students \u00b7 A to Z \u00b7 tap a name</span></div>
+${info.some(i=>i.st==="help")?`<div class="seat-help">\u270b Help: ${info.filter(i=>i.st==="help").map(i=>`<button class="seat-hb" data-seat="${sv(i.sid)}">${sv(i.name)}</button>`).join("")}</div>`:""}
+<div class="seat-detail" id="seat-detail"></div>
+<div class="seat-grid">${info.map(i=>{const nmx=i.name.split(" ");return`<button type="button" class="seat s-${i.st}${i.off&&i.st!=="done"&&i.st!=="ended"?" off":""}" data-seat="${sv(i.sid)}" title="${sv(i.name)}"><i class="dot"></i><span class="sn">${sv(i.name)}</span>${i.w?`<em class="sb w">\u26a0${i.w}</em>`:""}${i.st==="help"?'<em class="sb h">\u270b</em>':i.st==="paused"?'<em class="sb p">\u23f8</em>':(i.st==="done"?'<em class="sb d">\u2714</em>':i.st==="ended"?'<em class="sb e">\u25a0</em>':"")}${i.chk?'<em class="sb c">\u2611</em>':""}</button>`}).join("")}</div>`;
+ cards[0].before(wrap);cards.forEach(c=>store.appendChild(c));wrap.after(store);
+ if(SEAT&&!info.some(i=>i.sid===SEAT))SEAT=null;
+ paintSeat()}
+function paintSeat(){
+ const box=$("#live");if(!box)return;const det=$("#seat-detail"),store=box.querySelector(".seat-store");if(!det||!store)return;
+ [...det.querySelectorAll(".lv[data-seat-sid]")].forEach(c=>store.appendChild(c));
+ box.querySelectorAll(".seat").forEach(b=>b.classList.toggle("on",b.dataset.seat===SEAT));
+ if(!SEAT){det.innerHTML="";det.hidden=true;return}
+ const c=[...store.children].find(x=>x.dataset&&x.dataset.seatSid===SEAT);
+ if(!c){det.hidden=true;return}
+ det.hidden=false;det.innerHTML='<div class="seat-dh"><b>Selected student</b> <button class="btn sm alt" data-seat-x="1">Close</button></div><div class="seat-act" id="seat-act"></div>';
+ const st=[...c.classList].find(x=>ST.includes(x))||"active";
+ det.querySelector("#seat-act").innerHTML=`<span class="note" style="margin:0">Let this student back in:</span> <select id="seat-x" title="Extra time"><option value="0">+0 min</option><option value="5">+5 min</option><option value="10">+10 min</option><option value="15">+15 min</option><option value="20">+20 min</option><option value="30">+30 min</option></select> <button class="btn sm" data-grant="continue">Allow to continue (keeps answers)</button> <button class="btn sm alt" data-grant="start">Allow to start again</button>`;
+ det.appendChild(c);det.scrollIntoView({block:"nearest",behavior:"smooth"})}
+{const _rl=refreshLive;refreshLive=function(L){_rl.apply(this,arguments);try{seatify()}catch(e){}}}
+document.addEventListener("click",e=>{
+ const live=e.target.closest&&e.target.closest("#live");if(!live)return;
+ const s=e.target.closest("[data-seat]");if(s){SEAT=SEAT===s.dataset.seat?null:s.dataset.seat;paintSeat();return}
+ if(e.target.closest("[data-seat-x]")){SEAT=null;paintSeat();return}
+ const g=e.target.closest("[data-grant]");if(g){grantAccess(SEAT,g.dataset.grant,+($("#seat-x")||{value:0}).value)}});
+
+/* ============ 3. PERMISSION TO GO BACK IN ============ */
+const staffMail=()=>{try{return typeof staffEmail==="function"?staffEmail():""}catch(e){return""}};
+async function versionAids(aid){const r=await rows("exam_versions","parent=eq."+enc(aid)+"&select=vid");return[aid,...((r.ok&&r.j)||[]).map(v=>v.vid)]}
+async function deleteMyResults(aid,rid,name){
+ const A=await versionAids(aid),inl="("+A.map(x=>'"'+x.replace(/"/g,"")+'"').join(",")+")";
+ await sb("/rest/v1/results?aid=in."+enc(inl)+"&roster_id=eq."+rid,{method:"DELETE",headers:{Prefer:"return=minimal"}});
+ await sb("/rest/v1/results?aid=in."+enc(inl)+"&roster_id=is.null&name=eq."+enc(name),{method:"DELETE",headers:{Prefer:"return=minimal"}})}
+async function hasResult(aid,rid,name){const A=await versionAids(aid),inl="("+A.map(x=>'"'+x.replace(/"/g,"")+'"').join(",")+")";
+ const a=await rows("results","aid=in."+enc(inl)+"&roster_id=eq."+rid+"&select=id&limit=1"),b=await rows("results","aid=in."+enc(inl)+"&roster_id=is.null&name=eq."+enc(name)+"&select=id&limit=1");
+ return !!((a.ok&&a.j&&a.j.length)||(b.ok&&b.j&&b.j.length))}
+async function dropLive(aid,name){const L=await Live.list();for(const s of L.filter(x=>x.aid===aid&&nm(x.name)===nm(name)))await Live.remove(s.sid)}
+async function approve(q,kind,extra){
+ if(q.had_result||await hasResult(q.aid,q.roster_id,q.name)){
+  if(!await confirmBox(`<b>Warning:</b> <b>${sv(q.name)}</b> already submitted this exam. Letting ${kind==="continue"?"him/her finish":"him/her start again"} <b>deletes the submitted result</b>. A new result is saved when the student submits again. Continue?`,""))return false;
+  await deleteMyResults(q.aid,q.roster_id,q.name)}
+ await dropLive(q.aid,q.name);
+ const r=await sb("/rest/v1/exam_requests?id=eq."+q.id,{method:"PATCH",body:JSON.stringify({status:"approved",kind,extra_min:extra,decided:new Date().toISOString(),decided_by:staffMail()||null}),headers:{Prefer:"return=minimal"}});
+ if(!r.ok){toast("Could not save. Run 7-marks-and-permissions.sql in Supabase.");return false}
+ toast(q.name+" can go back in now.");return true}
+async function grantAccess(sid,kind,extra){
+ if(!sid)return;const L=await Live.list(),s=L.find(x=>x.sid===sid);if(!s){toast("Student not found.");return}
+ const y=await rows("roster","name=eq."+enc(s.name)+"&active=eq.true&select=id,cls,year&limit=1");
+ if(!y.ok||!y.j||!y.j[0]){toast("Could not find this student on the class list.");return}
+ const q={id:null,aid:s.aid,title:s.title,roster_id:y.j[0].id,name:s.name,cls:y.j[0].cls,had_result:false};
+ if(await hasResult(q.aid,q.roster_id,q.name)){
+  if(!await confirmBox(`<b>Warning:</b> <b>${sv(s.name)}</b> already submitted this exam. This <b>deletes the submitted result</b> so he/she can ${kind==="continue"?"finish":"sit again"}. Continue?`,""))return;
+  await deleteMyResults(q.aid,q.roster_id,q.name)}
+ await dropLive(q.aid,q.name);
+ const r=await sb("/rest/v1/exam_requests",{method:"POST",body:JSON.stringify({aid:q.aid,title:q.title,roster_id:q.roster_id,name:q.name,cls:q.cls,kind,status:"approved",extra_min:extra,decided:new Date().toISOString(),decided_by:staffMail()||null}),headers:{Prefer:"return=minimal"}});
+ if(!r.ok){toast("Could not save. Run 7-marks-and-permissions.sql in Supabase.");return}
+ SEAT=null;toast(s.name+" can go back in. Ask him/her to open the exam and type the name again.");liveSig="";try{refreshLive(await Live.list())}catch(e){}}
+let RQ=[],seen=new Set();
+function rqPanel(){
+ const lv=$("#live");if(!lv||!isStaff())return;let p=$("#rq-panel");
+ if(!p){p=document.createElement("div");p.id="rq-panel";p.className="rq";lv.parentNode.insertBefore(p,lv);
+  p.addEventListener("click",async e=>{const b=e.target.closest("[data-rq]");if(!b)return;const q=RQ.find(x=>String(x.id)===b.dataset.id);if(!q)return;
+   if(b.dataset.rq==="deny"){await sb("/rest/v1/exam_requests?id=eq."+q.id,{method:"PATCH",body:JSON.stringify({status:"denied",decided:new Date().toISOString(),decided_by:staffMail()||null}),headers:{Prefer:"return=minimal"}});loadRq();return}
+   const ex=+(p.querySelector('[data-ex="'+q.id+'"]')||{value:0}).value;if(await approve(q,b.dataset.rq,ex))loadRq()})}
+ p.hidden=!RQ.length;
+ p.innerHTML=RQ.length?`<h3>Students asking to go back in (${RQ.length})</h3>${RQ.map(q=>`<div class="rq-r"><div><b>${sv(q.name)}</b> <span class="tag">${sv(q.cls)}</span> <span class="note" style="margin:0">${sv(q.title)} \u00b7 ${ago(q.created)} ago</span><br><span class="tag ${q.kind==="start"?"":"ok"}">wants to ${q.kind==="start"?"START AGAIN":"CONTINUE"}</span>${q.had_result?' <span class="tag bad">already submitted</span>':""}</div>
+<div class="rq-b"><select data-ex="${q.id}" title="Extra time"><option value="0">+0 min</option><option value="5">+5 min</option><option value="10">+10 min</option><option value="15">+15 min</option><option value="20">+20 min</option><option value="30">+30 min</option></select><button class="btn sm" data-rq="continue" data-id="${q.id}">Allow to continue</button><button class="btn sm alt" data-rq="start" data-id="${q.id}">Allow to start again</button><button class="btn sm danger" data-rq="deny" data-id="${q.id}">Not now</button></div></div>`).join("")}`:"";
+ const tb=document.querySelector('[data-dt="live"]');if(tb){let bd=tb.querySelector("#rqbadge");if(!bd){bd=document.createElement("span");bd.className="badge";bd.id="rqbadge";tb.appendChild(bd)}bd.hidden=!RQ.length;bd.textContent=RQ.length}}
+async function loadRq(){if(!OKR||!isStaff()||!$("#live"))return;
+ const r=await rows("exam_requests","status=eq.pending&select=*&order=created");if(!r.ok)return;
+ const ae=document.activeElement;if(ae&&ae.closest&&ae.closest("#rq-panel")&&ae.tagName==="SELECT"&&JSON.stringify((r.j||[]).map(x=>x.id))===JSON.stringify(RQ.map(x=>x.id)))return;
+ RQ=r.j||[];RQ.forEach(q=>{if(!seen.has(q.id)){seen.add(q.id);if(seen.size>1||true){try{beep()}catch(e){}toast(q.name+" asks to "+(q.kind==="start"?"start again":"continue")+".")}}});rqPanel()}
+setInterval(loadRq,4000);
+{const _bd=bindDash;bindDash=function(){_bd.apply(this,arguments);try{RQ=[];loadRq()}catch(e){}}}
+
+/* ---- the student side ---- */
+function applyPermit(name,kind,extra,a){
+ let found=false;
+ for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(!k||!k.startsWith("exam_"))continue;
+  try{const s=JSON.parse(localStorage.getItem(k));if(!s||!s.student||nm(s.student.name)!==nm(name))continue;found=true;
+   if(kind==="start")localStorage.removeItem(k);else{s.submitted=false;s.info=null;s.start=(s.start||Date.now())+extra*60000;localStorage.setItem(k,JSON.stringify(s))}}catch(e){}}
+ const ss=readSess(a.id);
+ if(kind==="start"||!found||!ss){try{localStorage.removeItem("ca_sess_"+a.id)}catch(e){}}
+ else{ss.done=false;ss.t0=(ss.t0||Date.now())+extra*60000;writeSess(a.id,ss)}
+ if(kind==="continue"&&!found)toast("Your saved answers were not found on this device, so you start again.")}
+function requestUi(a,name,st){
+ const e=$("#exe");if(!e){toast("Ask your teacher to let you in.");return}
+ let tm=null;
+ const draw=s=>{e.innerHTML=`<div class="msg">${s.has_result?"You have already submitted this exam.":"You already started this exam."} To go back in, <b>your teacher must allow you</b>.</div>
+${s.denied?'<div class="msg bad">Your teacher has not allowed this yet. Wait, then ask again.</div>':""}
+${s.pending?`<div class="msg good"><span class="spin"></span> Your request (${s.pending_kind==="start"?"start again":"continue"}) was sent. Waiting for your teacher\u2026 Stay on this page.</div>`:`<div class="row"><button class="btn" data-rqk="continue">Request to continue my exam</button><button class="btn alt" data-rqk="start">Request to start again</button></div><p class="note">Continue keeps your saved answers and the time you have left. Start again begins a new attempt.</p>`}`;
+  e.querySelectorAll("[data-rqk]").forEach(b=>b.onclick=async()=>{b.disabled=true;
+   const r=await rpc("request_access",{p_aid:a.id,p_name:name,p_pw:ss_get("ca_pwh_"+a.year)||"",p_cls:window.__stuCls||null,p_kind:b.dataset.rqk});
+   if(!(r.ok&&r.j&&r.j.ok)){e.insertAdjacentHTML("beforeend",'<div class="msg bad">Could not send the request. Check your internet and try again.</div>');b.disabled=false;return}
+   s.pending=true;s.pending_kind=b.dataset.rqk;s.denied=false;draw(s);poll()})};
+ const poll=()=>{clearInterval(tm);tm=setInterval(async()=>{if(!document.body.contains(e)){clearInterval(tm);return}
+  const r=await rpc("exam_entry_state",{p_aid:a.id,p_name:name,p_pw:ss_get("ca_pwh_"+a.year)||"",p_cls:window.__stuCls||null});
+  if(!(r.ok&&r.j&&r.j.ok))return;
+  if(r.j.status==="permit"){clearInterval(tm);e.innerHTML='<div class="msg good">Your teacher allowed you. Starting\u2026</div>';beginExam(a,name);return}
+  if(r.j.status==="new"){clearInterval(tm);beginExam(a,name);return}
+  st=r.j;draw(st)},4000)};
+ draw(st);if(st.pending)poll()}
+{const _be=beginExam;
+ beginExam=async function(a,name){
+  if(!OKR||isStaff()||!a)return _be.apply(this,arguments);
+  const q={p_aid:a.id,p_name:name,p_pw:ss_get("ca_pwh_"+a.year)||"",p_cls:window.__stuCls||null};
+  const r=await rpc("exam_entry_state",q);
+  if(r.status===404)return _be.apply(this,arguments);                       /* step 7 not installed yet: old behaviour */
+  if(!(r.ok&&r.j)){const e=$("#exe");const m="Could not check your exam. Check your internet and try again.";if(e)e.innerHTML='<div class="msg bad">'+m+"</div>";else toast(m);return}
+  if(!r.j.ok||r.j.status==="new")return _be.apply(this,arguments);
+  if(r.j.status==="permit"){const c=await rpc("consume_permit",q);if(c.ok&&c.j&&c.j.ok)applyPermit(name,c.j.kind,+c.j.extra_min||0,a);return _be.apply(this,arguments)}
+  requestUi(a,name,r.j)}}
+
+})();
+</script>
+<!--ROOM-ADDON-END-->
 </body></html>
