@@ -2931,4 +2931,65 @@ ${clash?`<label class="chk"><input type="checkbox" id="up-ow" checked>Replace th
 })();
 </script>
 <!--SHUFFLE-ADDON-END-->
+ <!--SHARED-DEVICE-START-->
+<script id="shared-device">
+(function(){
+ if(window.__SHD)return;window.__SHD=1;
+ if(typeof REMOTE==="undefined"||!REMOTE)return;
+ var P="ca_park|",KEEP=3*864e5;
+ var nz=function(s){return String(s||"").toUpperCase().replace(/\s+/g," ").trim()};
+ var busy=function(){return typeof EX!=="undefined"&&EX&&!EX.released};
+
+ /* Weka kando kila exam iliyobaki kwenye tablet, chini ya jina la mwenyewe */
+ function stash(){
+  if(busy())return;
+  try{
+   var now=Date.now(),ks=[],aidOf={},i;
+   for(i=0;i<localStorage.length;i++)ks.push(localStorage.key(i));
+   ks.forEach(function(k){
+    if(k&&k.indexOf("ca_sess_")===0){try{var s=JSON.parse(localStorage.getItem(k));if(s&&s.name)aidOf[nz(s.name)]=k.slice(8)}catch(e){}}});
+   ks.forEach(function(k){
+    if(!k)return;
+    var raw=localStorage.getItem(k),o;
+    if(k.indexOf(P)===0){try{o=JSON.parse(raw);if(!o||now-o.t>KEEP)localStorage.removeItem(k)}catch(e){localStorage.removeItem(k)}return}
+    var isS=k.indexOf("ca_sess_")===0,isE=k.indexOf("exam_")===0;
+    if(!isS&&!isE)return;
+    try{o=JSON.parse(raw)}catch(e){return}
+    if(!o||typeof o!=="object"||Array.isArray(o))return;
+    var name=isS?o.name:(o.student&&o.student.name);
+    if(!name){localStorage.removeItem(k);return}
+    var n=nz(name);
+    localStorage.setItem(P+n+"|"+k,JSON.stringify({t:now,k:k,v:raw,aid:isS?k.slice(8):(aidOf[n]||"")}));
+    localStorage.removeItem(k)});
+  }catch(e){}
+  try{sessionStorage.removeItem("ca_name");Object.keys(sessionStorage).forEach(function(k){if(k.indexOf("ca_cls_")===0)sessionStorage.removeItem(k)})}catch(e){}
+  try{window.__stuCls=""}catch(e){}
+ }
+
+ /* Rudisha majibu ya mwanafunzi huyu tu, pale mwalimu anapomruhusu */
+ function restore(name,aid){
+  try{
+   var pre=P+nz(name)+"|",ks=[],i,k;
+   for(i=0;i<localStorage.length;i++){k=localStorage.key(i);if(k&&k.indexOf(pre)===0)ks.push(k)}
+   ks.forEach(function(k){try{var o=JSON.parse(localStorage.getItem(k));if(o&&o.k&&(!aid||o.aid===aid)){localStorage.setItem(o.k,o.v);localStorage.removeItem(k)}}catch(e){}})
+  }catch(e){}
+ }
+
+ /* Ruhusa ya mwalimu ikipokelewa, rudisha majibu kabla mfumo haujayatumia */
+ var _sb=sb;
+ sb=function(path,opt,retry){
+  var p=_sb.apply(this,arguments);
+  if(typeof path==="string"&&path.indexOf("/rpc/consume_permit")>-1){
+   var a={};try{a=JSON.parse(opt.body)}catch(e){}
+   return p.then(function(r){if(r&&r.ok&&r.j&&r.j.ok&&a.p_name)restore(a.p_name,a.p_aid);return r})}
+  return p};
+
+ /* Hakuna tena "exam ya aliyetangulia" kuzuia wengine */
+ pendingExam=function(){stash();return null};
+ var _eg=examGate;
+ examGate=function(){stash();return _eg.apply(this,arguments)};
+ stash();
+})();
+</script>
+<!--SHARED-DEVICE-END-->
 </body></html>
