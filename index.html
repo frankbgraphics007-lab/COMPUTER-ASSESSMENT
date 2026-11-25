@@ -2992,4 +2992,262 @@ ${clash?`<label class="chk"><input type="checkbox" id="up-ow" checked>Replace th
 })();
 </script>
 <!--SHARED-DEVICE-END-->
+ <!--UPDATE2-START-->
+<style id="u2-style">
+.sup{margin:8px 0 12px;padding:12px 14px;border:2px solid var(--gold);border-radius:12px;background:var(--card)}
+.sup h3{font-size:1.2rem;margin:0 0 8px}
+.sup-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:4px 12px;margin:6px 0}
+.sup-grid label{margin:0;font-weight:500;font-size:.88rem}
+.sup b.y{display:block;margin-top:10px}
+.u2-bad{color:var(--bad);font-weight:700}
+</style>
+<script id="u2-js">
+(function(){
+ if(window.__U2)return;window.__U2=1;
+ if(typeof REMOTE==="undefined"||!REMOTE)return;
+ var nz=function(s){return String(s||"").toUpperCase().replace(/\s+/g," ").trim()};
+ var now=function(){return Date.now()};
+ var natc=function(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true})};
+ var tm=function(t){return new Date(t).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})};
+ var fmt=function(t){return new Date(t).toLocaleString("en-GB",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})};
+ var S={ro:null,cls:{},cnt:{},nm:{},sups:[],all:false,me:"",name:"",raw:[],loaded:false,sig:"",tsig:"",shown:false};
+
+ /* ---------- data ---------- */
+ function once(k,f){return S["p_"+k]||(S["p_"+k]=f().catch(function(){S["p_"+k]=null}))}
+ function loadMe(){return once("me",async function(){
+  S.me=String(staffEmail()||"").toLowerCase();if(!S.me)throw 0;
+  var n=S.me.split("@")[0];S.name=n.charAt(0).toUpperCase()+n.slice(1);
+  var r=await rows("staff_users","email=eq."+enc(S.me)+"&select=name");
+  if(r.ok&&r.j&&r.j[0]&&r.j[0].name)S.name=r.j[0].name})}
+ function loadRo(){return once("ro",async function(){
+  var d=await fetchAll("roster","select=name,cls,year,active&order=cls");if(!d)throw 0;
+  var ro={},cl={},cnt={},nm={};
+  d.forEach(function(r){var n=nz(r.name);ro[n]=r.cls;if(r.active){(cl[r.year]=cl[r.year]||{})[r.cls]=1;cnt[r.cls]=(cnt[r.cls]||0)+1;(nm[r.cls]=nm[r.cls]||{})[n]=1}});
+  S.ro=ro;S.cls=cl;S.cnt=cnt;S.nm=nm})}
+ async function loadSups(){
+  if(S.busy)return;S.busy=1;
+  try{var r=await rows("settings","key=like."+enc("sup:*")+"&select=key,value");
+   if(r.ok&&Array.isArray(r.j)){S.sups=r.j.map(function(x){return{k:x.key,v:x.value}});S.loaded=true}}catch(e){}
+  S.busy=0}
+ var active=function(){return S.sups.filter(function(x){return x&&x.v&&x.v.until>now()})};
+ var mine=function(){var m=active().filter(function(x){return x.v.email===S.me})[0];return m?m.v:null};
+ var covered=function(){var o={};active().forEach(function(x){(x.v.cls||[]).forEach(function(c){o[c]=1})});return o};
+ function visible(c){
+  if(!c||S.all)return true;
+  var m=mine();if(!m||!(m.cls||[]).length)return true;
+  if(m.cls.indexOf(c)>-1)return true;
+  return isAdmin()&&!covered()[c]}
+
+ /* ---------- 1. kuchuja wanafunzi kwa msimamizi ---------- */
+ var _ll=Live.list.bind(Live);
+ Live.list=async function(){
+  var L=await _ll();
+  if(!isStaff())return L;
+  try{await loadMe();await loadRo();if(!S.loaded)await loadSups();S.raw=L;
+   return S.ro?L.filter(function(s){return visible(S.ro[nz(s.name)])}):L}catch(e){return L}};
+ var _sb=sb;
+ sb=function(path,opt,retry){
+  var p=_sb.apply(this,arguments);
+  if(typeof path==="string"&&isStaff()&&(path.indexOf("/rest/v1/exam_requests?status=eq.pending")===0||path.indexOf("/rest/v1/results_tagged?submitted_at=gte")===0))
+   return p.then(function(r){if(r&&r.ok&&Array.isArray(r.j))r=Object.assign({},r,{j:r.j.filter(function(x){return visible(x.cls)})});return r});
+  return p};
+
+ /* ---------- 2. paneli ya "Who supervises which class?" ---------- */
+ function renderSup(force){
+  var p=document.getElementById("sup-panel");if(!p)return;
+  var d=p.querySelector("details");if(d&&d.open&&!force)return;
+  var m=mine(),cov=covered(),oth=active().filter(function(x){return x.v.email!==S.me}),un=[],seen={},who={};
+  active().forEach(function(x){(x.v.cls||[]).forEach(function(c){who[c]=x.v.name||x.v.email})});
+  if(Object.keys(cov).length)(S.raw||[]).forEach(function(s){
+   if(["active","help","paused"].indexOf(s.state)<0)return;
+   var c=S.ro&&S.ro[nz(s.name)];if(c&&!cov[c]&&!seen[c]){seen[c]=1;un.push(c)}});
+  var yrs=Object.keys(S.cls).map(Number).sort(function(a,b){return a-b});
+  var sig=JSON.stringify([m,oth.map(function(x){return x.v}),un,S.all,yrs.length]);
+  if(sig===S.sig&&!force)return;S.sig=sig;
+  p.innerHTML='<h3>Who supervises which class?</h3>'+
+   (m?'<p>You are supervising: <b>'+m.cls.map(esc).join(", ")+'</b> <span class="note" style="margin:0">until '+tm(m.until)+'</span></p><p class="note">You see only these classes: their students, help requests and requests to continue.</p>'
+     :'<p class="note">You have not chosen a class, so you see every student. Choose the class you are supervising.</p>')+
+   (oth.length?'<div class="tw"><table><tr><th>Teacher</th><th>Classes</th><th>Until</th></tr>'+oth.map(function(x){return'<tr><td>'+esc(x.v.name||x.v.email)+'</td><td>'+(x.v.cls||[]).map(esc).join(", ")+'</td><td>'+tm(x.v.until)+'</td></tr>'}).join("")+'</table></div>':"")+
+   (un.length?'<div class="msg bad"><b>No teacher is supervising:</b> '+un.map(esc).join(", ")+'. Their students are in an exam now.'+(isAdmin()?" You can see them.":" Please take them or tell the main admin.")+'</div>':"")+
+   '<label class="chk"><input type="checkbox" id="sup-all"'+(S.all?" checked":"")+'>Show all classes (to cover for a colleague)</label>'+
+   '<details id="sup-d"><summary><b>'+(m?"Change my classes":"Choose my classes")+'</b></summary>'+
+   (yrs.length?yrs.map(function(y){return'<b class="y">Year '+y+'</b><div class="sup-grid">'+Object.keys(S.cls[y]).sort(natc).map(function(c){
+     return'<label class="chk"><input type="checkbox" data-sc="'+esc(c)+'"'+(m&&m.cls.indexOf(c)>-1?" checked":"")+'>'+esc(c)+(who[c]&&who[c]!==S.name?' <span class="note" style="margin:0">('+esc(who[c])+')</span>':"")+'</label>'}).join("")+'</div>'}).join(""):'<p class="note">The class list is loading or empty.</p>')+
+   '<div class="row"><label for="sup-h" style="margin:0">Supervise for</label><select id="sup-h" style="width:auto">'+[1,2,3,4,5,6].map(function(h){return'<option value="'+h+'"'+(h===3?" selected":"")+'>'+h+' hour'+(h>1?"s":"")+'</option>'}).join("")+'</select><button class="btn sm" data-sup="save">Save</button>'+(m?'<button class="btn sm danger" data-sup="stop">Stop supervising</button>':"")+'</div></details>'}
+ async function writeSup(v){
+  var r=await sb("/rest/v1/settings?on_conflict=key",{method:"POST",body:JSON.stringify({key:"sup:"+S.me,value:v}),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
+  if(!r.ok){toast("Could not save. Your account may not be allowed to change settings. Send me this message and I will give you the small fix.");return false}
+  await loadSups();S.sig="";S.tsig="";renderSup(true);liveSig="";Live.list().then(refreshLive);drawToday(true);return true}
+ function mountSup(){
+  var live=document.querySelector('[data-t="live"]');if(!live||!isStaff()||document.getElementById("sup-panel"))return;
+  var p=document.createElement("div");p.id="sup-panel";p.className="sup";
+  var h2=live.querySelector("h2");if(h2)h2.after(p);else live.prepend(p);
+  p.addEventListener("click",async function(e){
+   var b=e.target.closest("[data-sup]");if(!b)return;
+   if(b.dataset.sup==="save"){
+    var cl=[].slice.call(p.querySelectorAll("[data-sc]:checked")).map(function(x){return x.dataset.sc});
+    if(!cl.length){toast("Tick at least one class, or press Stop.");return}
+    var hh=+(p.querySelector("#sup-h")||{value:3}).value||3;
+    if(await writeSup({email:S.me,name:S.name,cls:cl,until:now()+hh*36e5,t:now()}))toast("Saved. You now see only: "+cl.join(", "));
+   }else if(b.dataset.sup==="stop"){
+    if(await writeSup({email:S.me,name:S.name,cls:[],until:0,t:now()}))toast("You stopped supervising. You see every class again.")}});
+  p.addEventListener("change",function(e){
+   if(e.target.id==="sup-all"){S.all=e.target.checked;S.sig="";S.tsig="";liveSig="";Live.list().then(refreshLive);renderSup(true);drawToday(true)}});
+  (async function(){try{await loadMe();await loadRo();await loadSups();renderSup(true)}catch(e){}})()}
+
+ /* ---------- 3. tab ya "Today" ---------- */
+ async function drawToday(force){
+  var p=document.getElementById("u2-today"),box=document.getElementById("u2-tb");
+  if(!p||!box||p.hidden)return;
+  if(box.querySelector("details[open]")&&!force)return;
+  await loadMe();await loadRo();if(!S.loaded)await loadSups();
+  var d0=new Date();d0.setHours(0,0,0,0);
+  var L=await Live.list();
+  var rr=await rows("results_tagged","submitted_at=gte."+enc(d0.toISOString())+"&select=exam_id,exam_title,name,cls,submitted_at&order=submitted_at.desc&limit=1500");
+  var rq=await rows("exam_requests","status=eq.pending&select=id,cls");
+  var C={},get=function(c){return C[c]||(C[c]={act:{},sub:{},seen:{},help:0})};
+  L.forEach(function(s){var c=(S.ro&&S.ro[nz(s.name)])||"Unassigned",o=get(c),n=nz(s.name);o.seen[n]=1;
+   if(s.state==="help"){o.act[n]=1;o.help++}else if(s.state==="active"||s.state==="paused")o.act[n]=1;
+   else if(s.state==="done"||s.state==="ended")o.sub[n]=1});
+  var rj=(rr.ok&&Array.isArray(rr.j))?rr.j:[];
+  rj.forEach(function(r){var o=get(r.cls||"Unassigned"),n=nz(r.name);o.sub[n]=1;o.seen[n]=1});
+  var names=Object.keys(C).sort(natc),cnt=S.cnt||{},nmap=S.nm||{};
+  var tIn=0,tHelp=0,tSub=0;
+  names.forEach(function(c){var o=C[c];tIn+=Object.keys(o.act).length;tHelp+=o.help;tSub+=Object.keys(o.sub).filter(function(n){return!o.act[n]}).length});
+  var nReq=(rq.ok&&Array.isArray(rq.j))?rq.j.length:0,m=mine();
+  var html='<p class="note">'+(m?'Showing your classes: <b>'+m.cls.map(esc).join(", ")+'</b>.':'Showing every class (choose your classes in Live exams).')+' Counts are for today.</p>'+
+   '<div class="tiles"><div class="tile"><b>'+tIn+'</b><span>In an exam now</span></div><div class="tile"><b class="'+(tHelp?"u2-bad":"")+'">'+tHelp+'</b><span>Need help</span></div><div class="tile"><b class="'+(nReq?"u2-bad":"")+'">'+nReq+'</b><span>Asking to continue</span></div><div class="tile"><b>'+tSub+'</b><span>Submitted today</span></div></div>'+
+   (names.length?'<div class="tw"><table><tr><th>Class</th><th>Students</th><th>In exam</th><th>Submitted</th><th>Help</th><th>Not started yet</th></tr>'+names.map(function(c){
+     var o=C[c],tot=cnt[c]||0,a=Object.keys(o.act).length,s=Object.keys(o.sub).filter(function(n){return!o.act[n]}).length,ns=Object.keys(nmap[c]||{}).filter(function(n){return!o.seen[n]}).sort();
+     return'<tr><td><b>'+esc(c)+'</b></td><td>'+(tot||"?")+'</td><td>'+a+'</td><td>'+s+'</td><td class="'+(o.help?"u2-bad":"")+'">'+o.help+'</td><td>'+(ns.length?'<details><summary>'+ns.length+' student'+(ns.length>1?"s":"")+'</summary><div class="note" style="margin:6px 0">'+ns.map(esc).join("<br>")+'</div></details>':'0')+'</td></tr>'}).join("")+'</table></div>':'<div class="empty">No exam activity today yet in '+(m?"your classes":"any class")+'.</div>')+
+   '<div class="row"><button class="btn sm" id="u2-golive">Open Live exams</button></div>';
+  var sig=JSON.stringify([html.length,tIn,tHelp,nReq,tSub,names.map(function(c){return[c,Object.keys(C[c].seen).length,Object.keys(C[c].sub).length]})]);
+  if(sig===S.tsig&&!force)return;S.tsig=sig;
+  box.innerHTML=html;
+  var g=document.getElementById("u2-golive");if(g)g.onclick=function(){dashTab("live")}}
+ function mountToday(){
+  var live=document.querySelector('[data-t="live"]');if(!live||!isStaff()||document.getElementById("u2-today"))return;
+  var p=document.createElement("div");p.className="panel";p.id="u2-today";p.dataset.t="today";p.hidden=true;
+  p.innerHTML='<h2>Today</h2><div id="u2-tb"><p class="note">Loading\u2026</p></div>';
+  live.before(p);
+  var tabs=document.querySelector(".dtabs"),first=tabs&&tabs.querySelector('[data-dt="live"]');
+  if(tabs&&first&&!tabs.querySelector('[data-dt="today"]')){
+   var b=document.createElement("button");b.className="dt";b.dataset.dt="today";b.textContent="Today";first.before(b);
+   b.onclick=function(){dashTab("today");S.tsig="";drawToday(true)}}
+  if(!S.shown){S.shown=true;dashTab("today")}else dashTab(DT);
+  S.tsig="";drawToday(true)}
+
+ /* ---------- 4. Schedule ya exam (kufungua na kufunga) ---------- */
+ var loc=function(t){if(!t)return"";var d=new Date(t-new Date(t).getTimezoneOffset()*6e4);return d.toISOString().slice(0,16)};
+ function sstate(a){var n=now();if(a.opens&&n<a.opens)return"soon";if(a.closes&&n>a.closes)return"closed";return"open"}
+ function schedModal(a){
+  var o=mgModal('<h2>Schedule</h2><p class="note">'+esc(a.title)+'</p><label for="u2-o">Opens at (empty = open now)</label><input id="u2-o" type="datetime-local" value="'+loc(a.opens)+'"><label for="u2-c">Closes at (empty = never closes)</label><input id="u2-c" type="datetime-local" value="'+loc(a.closes)+'"><p class="note">Students who already started keep working. Closing only stops new students from starting. To give extra time, set a later closing time.</p><div class="row"><button class="btn" id="u2-s">Save</button><button class="btn alt" id="u2-n">Close it now</button><button class="btn alt" id="u2-r">Remove schedule</button><button class="btn alt" id="u2-x">Cancel</button></div>');
+  var q=function(s){return o.querySelector(s)};
+  var save=function(op,cl,m){o.remove();db.a=db.a.map(function(x){return x.id===a.id?Object.assign({},x,{opens:op,closes:cl}):x});persist(m)};
+  q("#u2-x").onclick=function(){o.remove()};
+  q("#u2-s").onclick=function(){var op=q("#u2-o").value?new Date(q("#u2-o").value).getTime():0,cl=q("#u2-c").value?new Date(q("#u2-c").value).getTime():0;
+   if(op&&cl&&cl<=op){toast("The closing time must be after the opening time.");return}save(op,cl,"Schedule saved.")};
+  q("#u2-n").onclick=function(){save(a.opens||0,now(),"Exam closed.")};
+  q("#u2-r").onclick=function(){save(0,0,"Schedule removed. The exam is open.")}}
+ function schedBtns(){
+  document.querySelectorAll("#app [data-d]").forEach(function(b){
+   var a=(db.a||[]).find(function(x){return x.id===b.dataset.d});
+   if(!a||b.parentNode.querySelector("[data-sch]"))return;
+   var t=document.createElement("button");t.className="btn sm alt";t.dataset.sch=a.id;t.textContent="Schedule";
+   t.onclick=function(){schedModal(a)};
+   b.parentNode.insertBefore(t,b.parentNode.firstChild);b.parentNode.insertBefore(document.createTextNode(" "),t.nextSibling);
+   var r=b.closest("tr"),st=sstate(a);
+   if((a.opens||a.closes)&&r&&r.cells.length>2){var c=r.cells[r.cells.length-2];
+    if(!c.querySelector(".u2-st"))c.insertAdjacentHTML("beforeend",' <span class="tag u2-st '+(st==="open"?"ok":"bad")+'">'+(st==="soon"?"Opens "+fmt(a.opens):st==="closed"?"Closed":(a.closes?"Open until "+fmt(a.closes):"Open"))+"</span>")}})}
+ function closedPage(a){
+  var s=sstate(a),c=catOf(a.cat);
+  return crumb([["Home","#/"],["Year "+a.year,"#/class/"+a.year],[c?c.n:"Assessment","#/class/"+a.year+"/"+a.cat],[esc(a.title)]])+
+   '<div class="panel gate"><div class="ph"><h1>'+esc(a.title)+'</h1><div class="rule"></div></div><div class="msg'+(s==="closed"?" bad":"")+'">'+
+   (s==="soon"?'This exam is not open yet. It opens on <b>'+fmt(a.opens)+'</b>.':'This exam is closed. It closed on <b>'+fmt(a.closes)+'</b>. Ask your teacher if you need more time.')+
+   '</div><div class="row"><a class="btn alt" href="#/class/'+a.year+'/'+a.cat+'">Back</a></div></div>'}
+ var _eg=examGate;
+ examGate=function(a){if(a&&!isStaff()&&sstate(a)!=="open")return closedPage(a);return _eg.apply(this,arguments)};
+ var _beg=bindExamGate;
+ bindExamGate=function(){if(!document.getElementById("exn"))return;return _beg.apply(this,arguments)};
+ var _vw=view;
+ view=function(a,pv){if(a&&!pv&&!isStaff()&&sstate(a)!=="open")return closedPage(a);return _vw.apply(this,arguments)};
+ var _ct=cat;
+ cat=function(){
+  var h=_ct.apply(this,arguments);if(isStaff())return h;
+  (db.a||[]).forEach(function(a){var s=sstate(a);if(s==="open")return;
+   h=h.replace(new RegExp('<a class="btn sm" href="#/view/'+a.id+'">[A-Z]+</a>'),'<span class="tag bad">'+(s==="soon"?"Opens "+fmt(a.opens):"Closed")+'</span>')});
+  return h};
+
+ /* ---------- 5. Kuingiza wanafunzi kwa Excel/CSV (main admin) ---------- */
+ function loadX(){return window.XLSX?Promise.resolve():new Promise(function(res,rej){var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=res;s.onerror=function(){rej(new Error("Could not load the Excel reader. Save the file as CSV and try again."))};document.head.appendChild(s)})}
+ function csvRows(t){var out=[],row=[],cur="",q=false;t=String(t).replace(/^\ufeff/,"");
+  for(var i=0;i<t.length;i++){var c=t[i];
+   if(q){if(c==='"'){if(t[i+1]==='"'){cur+='"';i++}else q=false}else cur+=c}
+   else if(c==='"')q=true;else if(c===","||c===";"||c==="\t"){row.push(cur);cur=""}
+   else if(c==="\n"||c==="\r"){if(c==="\r"&&t[i+1]==="\n")i++;row.push(cur);out.push(row);row=[];cur=""}else cur+=c}
+  if(cur!==""||row.length){row.push(cur);out.push(row)}return out}
+ async function readTable(f){
+  if(/\.(csv|txt)$/i.test(f.name))return csvRows(await f.text());
+  await loadX();var wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""})}
+ function parseStu(aoa){
+  var hi=-1,i;for(i=0;i<Math.min(aoa.length,10);i++){if(aoa[i].some(function(c){return/^(name|student|student name|candidate|jina)$/i.test(String(c).trim())})){hi=i;break}}
+  if(hi<0)return{err:"Header row not found. The first column must be called Name."};
+  var H=aoa[hi].map(function(c){return String(c).trim().toLowerCase()}),ix=function(re){return H.findIndex(function(h){return re.test(h)})};
+  var cn=ix(/^(name|student|student name|candidate|jina)$/),cc=ix(/^(class|stream|darasa)$/),cy=ix(/^(year|grade|form)$/),ca=ix(/^(adm|adm\.?\s*no|admission.*)$/),cs=ix(/^(sex|gender)$/);
+  if(cc<0)return{err:"A column called Class is needed."};
+  var rows2=[],bad=[];
+  for(i=hi+1;i<aoa.length;i++){var r=aoa[i],name=nz(r[cn]),cls=nz(r[cc]);if(!name)continue;
+   if(!cls){bad.push(name+": no class");continue}
+   var yr=cy>=0&&+r[cy]>0?+r[cy]:parseInt(cls,10);if(!(yr>=1&&yr<=13)){bad.push(name+": year not clear");continue}
+   var sx=cs>=0?String(r[cs]).trim().charAt(0).toUpperCase():"";
+   if(sx==="B")sx="M";if(sx==="G")sx="F";
+   if(sx!=="M"&&sx!=="F"){var m=cls.match(/^\d+\s*([BG])/);sx=m?(m[1]==="B"?"M":"F"):""}
+   if(!sx){bad.push(name+": sex not clear (add a Sex column M/F)");continue}
+   rows2.push({name:name,cls:cls,year:yr,adm:ca>=0&&String(r[ca]).trim()?String(r[ca]).trim():null,sex:sx})}
+  return{rows:rows2,bad:bad}}
+ function importFlow(){
+  var o=mgModal('<h2>Import students</h2><p class="note">Excel (.xlsx) or CSV with columns <b>Name, Class</b>, and optionally <b>Year, Adm no, Sex</b> (M/F). If Sex is missing, it is read from the class (7B = boys, 7G = girls). Students that already exist (same name and class) are skipped.</p><input id="u2-f" type="file" accept=".xlsx,.xls,.csv"><div id="u2-pv"></div><label class="chk"><input type="checkbox" id="u2-act" checked>New students can sit exams (active)</label><div class="row"><button class="btn" id="u2-go" disabled>Import</button><button class="btn alt" id="u2-no">Close</button></div>');
+  var q=function(s){return o.querySelector(s)},P=null;
+  q("#u2-no").onclick=function(){o.remove()};
+  q("#u2-f").onchange=async function(e){
+   var f=e.target.files[0];if(!f)return;q("#u2-pv").innerHTML='<p class="note">Reading\u2026</p>';
+   try{var res=parseStu(await readTable(f));if(res.err){q("#u2-pv").innerHTML='<div class="msg bad">'+esc(res.err)+'</div>';return}
+    var ex=await fetchAll("roster","select=name,cls"),have={};(ex||[]).forEach(function(r){have[nz(r.name)+"|"+nz(r.cls)]=1});
+    var fresh=res.rows.filter(function(r){return!have[r.name+"|"+r.cls]});P=fresh;
+    q("#u2-pv").innerHTML='<div class="tiles"><div class="tile"><b>'+fresh.length+'</b><span>New students</span></div><div class="tile"><b>'+(res.rows.length-fresh.length)+'</b><span>Already exist (skipped)</span></div><div class="tile"><b class="'+(res.bad.length?"u2-bad":"")+'">'+res.bad.length+'</b><span>Problems</span></div></div>'+
+     (res.bad.length?'<div class="msg bad" style="max-height:20vh;overflow:auto">'+res.bad.slice(0,30).map(function(x){return"<div>\u2022 "+esc(x)+"</div>"}).join("")+'</div>':"")+
+     (fresh.length?'<div class="tw" style="max-height:24vh"><table><tr><th>Name</th><th>Class</th><th>Year</th><th>Sex</th></tr>'+fresh.slice(0,8).map(function(r){return"<tr><td>"+esc(r.name)+"</td><td>"+esc(r.cls)+"</td><td>"+r.year+"</td><td>"+r.sex+"</td></tr>"}).join("")+'</table></div><p class="note">Showing the first 8.</p>':"");
+    q("#u2-go").disabled=!fresh.length}
+   catch(err){q("#u2-pv").innerHTML='<div class="msg bad">'+esc(err.message||"Could not read this file.")+'</div>'}};
+  q("#u2-go").onclick=async function(){
+   if(!P||!P.length)return;var b=q("#u2-go");b.disabled=true;b.textContent="Importing\u2026";
+   var act=q("#u2-act").checked,ok=0,fail=0,list=P.map(function(r){return Object.assign({},r,{active:act})});
+   for(var i=0;i<list.length;i+=100){var part=list.slice(i,i+100),r=await sb("/rest/v1/roster",{method:"POST",body:JSON.stringify(part),headers:{Prefer:"return=minimal"}});
+    if(r.ok)ok+=part.length;else for(var k=0;k<part.length;k++){var r1=await sb("/rest/v1/roster",{method:"POST",body:JSON.stringify(part[k]),headers:{Prefer:"return=minimal"}});if(r1.ok)ok++;else fail++}}
+   o.remove();S.p_ro=null;S.ro=null;toast(ok+" student(s) imported"+(fail?", "+fail+" failed (maybe already listed).":"."));
+   try{MG.data.students=null;mgShow()}catch(e){}};
+ }
+ function importBtn(){
+  if(typeof MG==="undefined"||MG.tab!=="students"||!isAdmin())return;
+  var add=document.getElementById("mgadd");if(!add||document.getElementById("u2-imp"))return;
+  var b=document.createElement("button");b.className="btn sm alt";b.id="u2-imp";b.textContent="Import from Excel/CSV";add.after(b);b.onclick=importFlow}
+ var _md=mgDraw;
+ mgDraw=function(){_md.apply(this,arguments);try{importBtn()}catch(e){}};
+
+ /* ---------- kuunganisha na dashibodi ---------- */
+ var _bd=bindDash;
+ bindDash=function(){
+  _bd.apply(this,arguments);
+  try{mountSup()}catch(e){}
+  try{mountToday()}catch(e){}
+  try{schedBtns()}catch(e){}};
+ var tk=0;
+ setInterval(async function(){
+  if(!isStaff())return;
+  try{await loadMe();await loadRo();if(++tk%3===1)await loadSups();renderSup();if(tk%2===0)drawToday()}catch(e){}
+ },5000);
+})();
+</script>
+<!--UPDATE2-END-->
 </body></html>
