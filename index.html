@@ -2855,4 +2855,80 @@ ${clash?`<label class="chk"><input type="checkbox" id="up-ow" checked>Replace th
 })();
 </script>
 <!--REP-ADDON-END-->
+ <!--SHUFFLE-ADDON-START-->
+<script id="shuffle-addon">
+(function(){
+ if(window.__SHUF)return;window.__SHUF=1;
+
+ /* ===== Hii inaendeshwa NDANI ya ukurasa wa exam ===== */
+ function runtime(){
+  var _b=window.build;
+  if(typeof _b!=="function"||window.__shufDone)return;
+  window.__shufDone=1;
+  var mode="off",seed=0,did=false;
+  var FIX=/\babove\b|\bbelow\b|all of these|none of these|neither of these|both of these/i;
+  var FIX2=/\b[A-D]\s*(?:and|&|,)\s*[A-D]\b|\bboth\s+[A-D]\b/;
+  function hash(s){var h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+  function mul(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+  function shuf(arr,r){for(var i=arr.length-1;i>0;i--){var j=Math.floor(r()*(i+1)),t=arr[i];arr[i]=arr[j];arr[j]=t}return arr}
+  function prepare(){
+   mode=(EX&&EX.shuffle)||"off";
+   if(mode!=="opt"&&mode!=="sec"&&mode!=="all"){mode="off";return}
+   var nm=((st&&st.student&&st.student.name)||"").toUpperCase().replace(/\s+/g," ").trim();
+   seed=hash(String(EX.id||"")+"|"+nm);
+   var r=mul(seed);
+   if(mode==="sec"){EX.sections.forEach(function(s){shuf(s.questions,r)})}
+   else if(mode==="all"){
+    var all=[],ins=[];
+    EX.sections.forEach(function(s){if(s.instructions&&ins.indexOf(s.instructions)<0)ins.push(s.instructions);s.questions.forEach(function(q){all.push(q)})});
+    shuf(all,r);
+    EX.sections=[{name:"Questions",short:"Questions",instructions:ins.join(" "),questions:all}]}
+   var n=0;EX.sections.forEach(function(s){s.questions.forEach(function(q){q.n=++n})})}
+  function mixOptions(){
+   var cs=document.querySelectorAll(".qc");
+   for(var i=0;i<cs.length;i++){
+    var c=cs[i],id=c.id.replace(/^c-/,""),q=QM[id];
+    if(!q||(q.type!=="mcq"&&q.type!=="multi"))continue;
+    var box=c.querySelector(".opts");if(!box)continue;
+    var labs=[].slice.call(box.children).filter(function(x){return x.classList&&x.classList.contains("opt")});
+    if(labs.length<2)continue;
+    var fixed=labs.some(function(l){var t=l.textContent,L0=l.querySelector(".L");if(L0)t=t.slice(L0.textContent.length);return FIX.test(t)||FIX2.test(t)});
+    if(fixed)continue;
+    shuf(labs,mul(hash(seed+":"+id)));
+    labs.forEach(function(l,k){box.appendChild(l);var L=l.querySelector(".L");if(L)L.textContent="ABCDEFGH".charAt(k)})}}
+  window.build=function(){
+   if(!did){did=true;try{prepare()}catch(e){mode="off"}}
+   var res=_b.apply(this,arguments);
+   try{if(mode!=="off")mixOptions()}catch(e){}
+   return res};
+ }
+
+ /* ===== Hii inaendeshwa kwenye portal (Exam Maker) ===== */
+ var KEY="ca_shuf";
+ var getM=function(){try{return localStorage.getItem(KEY)||"off"}catch(e){return"off"}};
+ var setM=function(v){try{localStorage.setItem(KEY,v)}catch(e){}};
+ var _e=examHtml;
+ examHtml=function(ex,forFile){
+  var m=getM(),c=Object.assign({},ex);
+  if(m==="off")delete c.shuffle;else c.shuffle=m;
+  var h=_e.call(this,c,forFile);
+  if(typeof h!=="string"||h.indexOf('id="shuf-js"')>-1)return h;
+  var i=h.lastIndexOf("</body>"),tag='<script id="shuf-js">('+runtime.toString()+')();<\/script>';
+  return i<0?h+tag:h.slice(0,i)+tag+h.slice(i)};
+
+ var OPT=[["off","No mixing (same order for everyone)"],["opt","Mix the options only (A, B, C, D)"],["sec","Mix options + questions inside each section"],["all","Mix options + ALL questions together (sections ignored)"]];
+ var NOTE={off:"Every student sees the same order.",opt:"Each student sees the options in a different order. Question order stays the same.",sec:"Each student gets a different order inside every section.",all:"Each student gets all questions in a different order. Section headings are replaced by one list. Do not use questions that say \"see Question 3\" or \"the code above\"."};
+ function ui(){
+  var b=document.getElementById("mpub");
+  if(!b||document.getElementById("shufsel"))return;
+  b.parentNode.insertAdjacentHTML("beforebegin",'<label for="shufsel">Mixing for each student</label><select id="shufsel">'+OPT.map(function(o){return'<option value="'+o[0]+'">'+o[1]+'</option>'}).join("")+'</select><p class="note" id="shufnote"></p>');
+  var s=document.getElementById("shufsel"),n=document.getElementById("shufnote");
+  s.value=getM();n.textContent=NOTE[s.value]||"";
+  s.onchange=function(){setM(s.value);n.textContent=NOTE[s.value]||""}}
+ var pend=false;
+ new MutationObserver(function(){if(!pend){pend=true;requestAnimationFrame(function(){pend=false;ui()})}}).observe(document.body,{childList:true,subtree:true});
+ ui();
+})();
+</script>
+<!--SHUFFLE-ADDON-END-->
 </body></html>
