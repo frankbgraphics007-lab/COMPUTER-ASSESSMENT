@@ -3250,4 +3250,151 @@ ${clash?`<label class="chk"><input type="checkbox" id="up-ow" checked>Replace th
 })();
 </script>
 <!--UPDATE2-END-->
+ <!--UPDATE3-START-->
+<style id="u3-style">
+:root{--bg:#ffffff;--card:#ffffff;--ink:#000000;--mut:#3b4252;--line:#c3c9d6;--field:#ffffff;--link:#0a3a9e;--msg-bg:#fff7e0;--msg-ink:#3d2e00;--msg-line:#e2c878;--good-bg:#e8f6ee;--good-ink:#0b3d1f}
+:root[data-theme="light"] body{background:#fff}
+@media(prefers-color-scheme:light){:root:not([data-theme]) body{background:#fff}}
+#u3-th{white-space:nowrap}
+th[data-u3s]{cursor:pointer;user-select:none}
+th[data-u3s]:hover{color:var(--ink)}
+#u3-bar summary{cursor:pointer}
+</style>
+<script id="u3-js">
+(function(){
+ if(window.__U3)return;window.__U3=1;
+ var natc=function(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true})};
+
+ /* ============ 1. LIGHT / DARK ============ */
+ (function(){
+  var KEY="ca_theme";
+  var get=function(){try{return localStorage.getItem(KEY)||""}catch(e){return""}};
+  var sysDark=function(){return!!(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)};
+  var eff=function(){return get()||(sysDark()?"dark":"light")};
+  function label(){var b=document.getElementById("u3-th");if(!b)return;var d=eff()==="dark";
+   b.textContent=d?"\u2600 Light":"\u263E Dark";b.setAttribute("aria-label",d?"Switch to light mode":"Switch to dark mode")}
+  function apply(){var t=get();if(t)document.documentElement.setAttribute("data-theme",t);else document.documentElement.removeAttribute("data-theme");label()}
+  var bar=document.querySelector("header .bar");
+  if(bar&&!document.getElementById("u3-th")){
+   var b=document.createElement("button");b.id="u3-th";b.type="button";b.className="btn sm ghost";
+   b.onclick=function(){try{localStorage.setItem(KEY,eff()==="dark"?"light":"dark")}catch(e){}apply()};
+   bar.appendChild(b)}
+  try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",label)}catch(e){}
+  apply();
+ })();
+
+ if(typeof REMOTE==="undefined"||!REMOTE||typeof MG==="undefined")return;
+
+ /* ============ 2. MWAKA UNATOKA KWENYE DARASA LA MWANAFUNZI ============ */
+ var _fa=fetchAll;
+ fetchAll=async function(table,q){
+  if(table==="results"||table==="results_tagged")q=String(q).replace(/([&?]|^)year=eq\.(\d+)/,"$1cls=ilike.$2*");
+  var d=await _fa.call(this,table,q);
+  if(d&&(table==="results"||table==="results_index")){
+   d.forEach(function(r){var y=parseInt(r.cls,10);if(y>0)r.year=y});
+   if(table==="results_index")d.sort(function(a,b){return(a.year-b.year)||natc(a.cls,b.cls)||natc(a.title,b.title)})}
+  return d};
+
+ /* ============ 3. VICHUJIO, KALENDA, KUPANGA ============ */
+ var RF={from:"",to:"",cls:"",g:"",pf:"",tabs:false,sort:"",dir:1};
+ var NUM={total:1,pct:1,tabs:1,year:1};
+ var mt=function(r){return r.submitted_at?new Date(r.submitted_at).getTime():0};
+ var lt=function(d){return new Date(d.getTime()-d.getTimezoneOffset()*6e4).toISOString().slice(0,16)};
+ var _f3=filt;
+ filt=function(t){
+  var r=_f3.apply(this,arguments);
+  if(t!=="results")return r;
+  var a=RF.from?new Date(RF.from).getTime():0,b=RF.to?new Date(RF.to).getTime()+59999:0;
+  r=r.filter(function(x){
+   if(a||b){var s=mt(x);if(a&&s<a)return false;if(b&&s>b)return false}
+   if(RF.cls&&x.cls!==RF.cls)return false;
+   if(RF.g&&x.grade!==RF.g)return false;
+   if(RF.pf==="p"&&!(+x.pct>=50))return false;
+   if(RF.pf==="f"&&!(+x.pct<50))return false;
+   if(RF.tabs&&!(+x.tabs>0))return false;
+   return true});
+  if(RF.sort){var k=RF.sort,d=RF.dir;
+   r=r.slice().sort(function(p,q){
+    if(k==="submitted_at")return(mt(p)-mt(q))*d;
+    if(NUM[k])return((+p[k]||0)-(+q[k]||0))*d;
+    return String(p[k]==null?"":p[k]).localeCompare(String(q[k]==null?"":q[k]),undefined,{numeric:true})*d})}
+  return r};
+ var redo=function(){MG.pg.results=0;MG.sel.results.clear();mgDraw()};
+ function quick(k){
+  var n=new Date(),s=new Date(n.getFullYear(),n.getMonth(),n.getDate());
+  if(k==="today"){RF.from=lt(s);RF.to=""}
+  else if(k==="yest"){RF.from=lt(new Date(s.getTime()-864e5));RF.to=lt(new Date(s.getTime()-6e4))}
+  else if(k==="week"){RF.from=lt(new Date(n.getTime()-7*864e5));RF.to=""}
+  else if(k==="month"){RF.from=lt(new Date(n.getFullYear(),n.getMonth(),1));RF.to=""}
+  else if(k==="reset"){RF.from=RF.to=RF.cls=RF.g=RF.pf="";RF.tabs=false}
+  else{RF.from=RF.to=""}
+  redo()}
+
+ function resBar(){
+  var body=document.getElementById("mgbody");
+  if(!body||document.getElementById("u3-bar"))return;
+  var first=body.querySelector(".row");if(!first)return;
+  var all=MG.data.results||[],f=filt("results"),n=f.length,seen={},classes=[];
+  all.forEach(function(r){if(r.cls&&!seen[r.cls]){seen[r.cls]=1;classes.push(r.cls)}});classes.sort(natc);
+  var sum=0,pass=0,hi=0,lo=100,by={};
+  f.forEach(function(x){var p=+x.pct||0;sum+=p;if(p>=50)pass++;if(p>hi)hi=p;if(p<lo)lo=p;
+   var c=x.cls||"?",o=by[c]||(by[c]={n:0,s:0,p:0,h:0});o.n++;o.s+=p;if(p>=50)o.p++;if(p>o.h)o.h=p});
+  if(!n)lo=0;
+  var ck=Object.keys(by).sort(natc),pc=function(a,b){return b?Math.round(a/b*100):0};
+  var el=document.createElement("div");el.id="u3-bar";el.className="panel";el.style.cssText="margin:10px 0;padding:12px 14px";
+  el.innerHTML=
+   '<div class="row" style="margin:0 0 8px;flex-wrap:wrap;gap:8px"><label for="u3-from" style="margin:0">From</label><input id="u3-from" type="datetime-local" data-u3f="from" value="'+esc(RF.from)+'" style="width:auto"><label for="u3-to" style="margin:0">To</label><input id="u3-to" type="datetime-local" data-u3f="to" value="'+esc(RF.to)+'" style="width:auto">'+
+   '<button class="btn sm alt" data-u3q="today">Today</button><button class="btn sm alt" data-u3q="yest">Yesterday</button><button class="btn sm alt" data-u3q="week">Last 7 days</button><button class="btn sm alt" data-u3q="month">This month</button><button class="btn sm alt" data-u3q="clear">Clear dates</button></div>'+
+   '<div class="row" style="margin:0 0 8px;flex-wrap:wrap;gap:8px"><select data-u3f="cls" style="width:auto"><option value="">All classes</option>'+classes.map(function(c){return'<option'+(RF.cls===c?" selected":"")+'>'+esc(c)+'</option>'}).join("")+'</select>'+
+   '<select data-u3f="g" style="width:auto"><option value="">All grades</option>'+["A","B","C","D","F"].map(function(g){return'<option'+(RF.g===g?" selected":"")+'>'+g+'</option>'}).join("")+'</select>'+
+   '<select data-u3f="pf" style="width:auto"><option value="">Pass and fail</option><option value="p"'+(RF.pf==="p"?" selected":"")+'>Pass only (50%+)</option><option value="f"'+(RF.pf==="f"?" selected":"")+'>Fail only</option></select>'+
+   '<label class="chk" style="margin:0"><input type="checkbox" data-u3f="tabs"'+(RF.tabs?" checked":"")+'>Only students who switched tabs</label><button class="btn sm alt" data-u3q="reset">Reset all filters</button></div>'+
+   '<div class="tiles"><div class="tile"><b>'+n+'</b><span>Results shown</span></div><div class="tile"><b>'+(n?Math.round(sum/n)+"%":"\u2013")+'</b><span>Average</span></div><div class="tile"><b>'+(n?pc(pass,n)+"%":"\u2013")+'</b><span>Pass rate</span></div><div class="tile"><b>'+(n?hi+"%":"\u2013")+'</b><span>Highest</span></div><div class="tile"><b>'+(n?lo+"%":"\u2013")+'</b><span>Lowest</span></div></div>'+
+   (ck.length?'<details style="margin-top:8px"><summary><b>By class ('+ck.length+')</b></summary><div class="tw"><table class="u3-t"><tr><th>Class</th><th>Students</th><th>Average</th><th>Pass rate</th><th>Highest</th><th></th></tr>'+ck.map(function(c){var o=by[c];return'<tr><td><b>'+esc(c)+'</b></td><td>'+o.n+'</td><td>'+Math.round(o.s/o.n)+'%</td><td>'+pc(o.p,o.n)+'%</td><td>'+o.h+'%</td><td><button class="btn sm alt" data-u3c="'+esc(c)+'">Show</button></td></tr>'}).join("")+'</table></div></details>':"");
+  first.after(el);
+  el.addEventListener("change",function(e){var t=e.target,k=t.dataset&&t.dataset.u3f;if(!k)return;RF[k]=t.type==="checkbox"?t.checked:t.value;redo()});
+  el.addEventListener("click",function(e){
+   var q=e.target.closest("[data-u3q]");if(q){quick(q.dataset.u3q);return}
+   var c=e.target.closest("[data-u3c]");if(c){RF.cls=c.dataset.u3c;redo()}});
+  /* kupanga safu */
+  var tb=body.querySelector(".tw>table:not(.u3-t)");
+  if(tb){var MAP={"Student":"name","Main class":"year","Stream":"cls","Assessment":"title","Marks":"total","%":"pct","Grade":"grade","Tab sw.":"tabs","Submitted":"submitted_at"};
+   [].forEach.call(tb.querySelectorAll("th"),function(th){
+    var key=MAP[th.textContent.trim()];if(!key)return;th.setAttribute("data-u3s",key);
+    if(RF.sort===key)th.textContent=th.textContent.trim()+(RF.dir>0?" \u25B2":" \u25BC");
+    th.onclick=function(){if(RF.sort===key)RF.dir=-RF.dir;else{RF.sort=key;RF.dir=1}redo()}})}
+  /* kitufe cha analysis: uliza jinsi ya kugawa ripoti */
+  var an=document.getElementById("mgan");
+  if(an&&!an.__u3){an.__u3=1;var orig=an.onclick;
+   an.onclick=function(){splitDialog(function(mode){window.__u3split=mode;if(orig)orig.call(an)})}}
+ }
+ var _md=mgDraw;
+ mgDraw=function(){_md.apply(this,arguments);try{if(MG.tab==="results")resBar()}catch(e){}};
+
+ /* ============ 4. RIPOTI YA ANALYSIS: KWA DARASA / KWA MWAKA / VYOTE ============ */
+ function splitDialog(go){
+  var f=filt("results"),cl={},yr={};
+  f.forEach(function(r){cl[r.cls||"?"]=1;yr[parseInt(r.cls,10)||r.year||"?"]=1});
+  var o=mgModal('<h2>Analysis and report</h2><p class="note">'+f.length+' result(s) from the filters above (or the ones you ticked).</p><label class="chk"><input type="radio" name="u3m" value="class" checked>Each class separately (recommended): '+Object.keys(cl).length+' class(es)</label><label class="chk"><input type="radio" name="u3m" value="year">Each year separately: '+Object.keys(yr).length+' year(s)</label><label class="chk"><input type="radio" name="u3m" value="all">All together: one report per exam</label><div class="row"><button class="btn" id="u3go">Make report</button><button class="btn alt" id="u3x">Cancel</button></div>');
+  o.querySelector("#u3x").onclick=function(){o.remove()};
+  o.querySelector("#u3go").onclick=function(){var m=o.querySelector("input[name=u3m]:checked").value;o.remove();go(m)}}
+ var _sb=sb;
+ sb=function(path,opt,retry){
+  var p=_sb.apply(this,arguments);
+  try{
+   var m=window.__u3split,b=document.getElementById("mgan");
+   if(m&&m!=="all"&&b&&b.disabled&&typeof path==="string"&&path.indexOf("/rest/v1/results?id=in.")===0&&path.indexOf("select=*")>-1){
+    return p.then(async function(r){
+     if(!r||!r.ok||!Array.isArray(r.j))return r;
+     var keys={},i;
+     for(i=0;i<r.j.length;i++){var a=r.j[i].aid;if(a&&!(a in keys))keys[a]=await getKey(a)}
+     r.j.forEach(function(x){
+      var g=m==="class"?(x.cls||"No class"):("Year "+(parseInt(x.cls,10)||x.year||"?")),na=x.aid+"~"+g;
+      KEYC[na]=keys[x.aid];x.aid=na;x.title=(x.title||"")+" \u00b7 "+g});
+     return r})}
+  }catch(e){}
+  return p};
+})();
+</script>
+<!--UPDATE3-END-->
 </body></html>
